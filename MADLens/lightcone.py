@@ -267,7 +267,7 @@ class WLSimulation(FastPMSimulation):
         self.cosmo = cosmology
         self.params= params
         if self.params['PGD']:
-            self.kl, self.ks, self.alpha0, self.mu = get_PGD_params(params['B'],res=pm.BoxSize[0]/pm.Nmesh[0],n_steps=params['n_steps'])
+            self.kl, self.ks, self.alpha0, self.mu = get_PGD_params(params['B'],res=pm.BoxSize[0]/pm.Nmesh[0],n_steps=params['N_steps'])
           
         # mean 3D particle density
         self.nbar    = pm.comm.allreduce(len(self.q))/pm.BoxSize.prod()
@@ -464,7 +464,7 @@ def test_wl(params, num, cosmo, randseed = 187):
     rho.csetitem([0, 0, 0], 0)
     rho       = rho.c2r()
 
-    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['n_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
+    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
 
     model     = wlsim.run.build()
     kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho.r2c()))

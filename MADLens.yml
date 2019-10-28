@@ -13,7 +13,7 @@ dependencies:
   - blas=1.0=mkl
   - bokeh=1.3.4=py37_0
   - bzip2=1.0.8=h7b6447c_0
-  - ca-certificates=2019.8.28=0
+  - ca-certificates=2019.10.16=0
   - cachey=0.1.1=py37_0
   - certifi=2019.9.11=py37_0
   - cffi=1.12.3=py37h2e261b9_0
@@ -79,13 +79,13 @@ dependencies:
   - numpy=1.17.2=py37haad9e8e_0
   - numpy-base=1.17.2=py37hde5b4d6_0
   - olefile=0.46=py37_0
-  - openssl=1.1.1d=h7b6447c_1
+  - openssl=1.1.1d=h7b6447c_3
   - packaging=19.2=py_0
   - pandas=0.25.1=py37he6710b0_0
   - partd=1.0.0=py_0
   - pfft-python=0.1.21=py37he0e0d13_8
   - pillow=6.1.0=py37h34e0f95_0
-  - pip=19.2.3=py37_0
+  - pip=19.3.1=py37_0
   - pluggy=0.13.0=py37_0
   - pmesh=0.1.54=py37hb3ffb1f_4
   - psutil=5.6.3=py37h7b6447c_0
