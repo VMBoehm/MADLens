@@ -62,6 +62,7 @@ def main(argv):
     
     results_path = os.path.join(FLAGS.results_path,githash)
     params_path  = os.path.join(os.path.join(os.getcwd()),'runs',githash)
+    params['results_path'] = results_path
 
     if not os.path.isdir(params_path):
         os.makedirs(params_path)

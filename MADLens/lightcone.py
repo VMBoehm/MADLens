@@ -52,8 +52,6 @@ def save3Dpower(mesh,zi,zf,params):
     path = params['snapshot_path'] 
     power = FFTPower(mesh, mode='1d')
     if mesh.pm.comm.rank==0:
-        print(zf,int(zf*100))
-        print(path+'power_z%d_%s.pkl')
         pickle.dump([zi,zf,power],open(path+'power_z%d_%s.pkl'%(zf*100,label),'wb'))
     return True
 
@@ -63,7 +61,6 @@ def paint2mesh(x,pm,zi,zf,params,dump_mesh=False,interlaced=True,compensated=Tru
     if dump_mesh:
         save3Dpower(mesh,zi=zi,zf=zf,params=params)
     return True
-
 
 def get_interp_factors(x_,x,y):
     indices = np.searchsorted(x, x_)
