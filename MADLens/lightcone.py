@@ -57,7 +57,7 @@ def save3Dpower(mesh,zi,zf,params):
 
 def paint2mesh(x,pm,zi,zf,params,dump_mesh=False,interlaced=True,compensated=True):
     cat    = ArrayCatalog({'Position' : x}, BoxSize=pm.BoxSize)
-    mesh   = cat.to_mesh(Nmesh=pm.Nmesh, interlaced=intelaced, compensated=compensated, window='cic')
+    mesh   = cat.to_mesh(Nmesh=pm.Nmesh, interlaced=interlaced, compensated=compensated, window='cic')
     if dump_mesh:
         save3Dpower(mesh,zi=zi,zf=zf,params=params)
     return True
