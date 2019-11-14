@@ -442,6 +442,93 @@ class WLSimulation(FastPMSimulation):
         
         return dict(kmaps=kmaps)
 
+    @autooperator('rhok->kmap, kmap_decon')
+    def run(self, rhok):
+        import resource
+        def getrss():
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+
+        dx, p  = self.firststep(rhok)
+
+        pt     = self.pt
+
+        stages = self.stages
+        q      = self.q
+
+        Om0    = pt.Om0
+
+        powers =[]
+
+        kmap   = self.mappm.create('real', value=0)
+        kmap_decon = self.mappm.create('real', value=0)
+
+        f, potk= self.gravity(dx)
+
+        for ai, af, di, df in zip(stages[:-1], stages[1:], self.dstages[:-1], self.dstages[1:]):
+            # central scale factor
+            ac = (ai * af) ** 0.5
+
+            #if self.pm.comm.rank == 0:
+            #    stdlib.watchpoint(f, lambda f, ai=ai: print('ai', ai, getrss()))
+
+            # kick
+            dp = f * (self.KickFactor(ai, ai, ac) * 1.5 * Om0)
+            p  = p + dp
+
+            # drift
+            ddx = p * self.DriftFactor(ai, ac, af)
+            dx  = dx + ddx
+
+            if self.PGD:
+                alpha    = self.alpha0*af**self.mu
+                dx_      = PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
+            else:
+                dx_      = 0.
+
+            dx_out   = dx+dx_
+
+            for M in self.imgen.generate(di, df):
+                # if lower end of box further away than source -> do nothing
+                if df>self.ds:
+                    pass
+                else:
+                    M, boxshift = M
+
+                    #if self.pm.comm.rank == 0:
+                    #    stdlib.watchpoint(f, lambda f, boxshift=boxshift: print('boxshift', boxshift, getrss()))
+
+                    xy, d    = self.rotate((dx_out + q)%self.pm.BoxSize, M, boxshift)
+                    # positions of unevolved particles after rotation
+                    d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=q))
+                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=self.ds, d_approx=d_approx :
+                                           1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+            
+                    xy = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )#*linalg.stack((d,d), axis=-1)/self.ds\
+
+
+                    w  = self.wlen(d)
+                    kmap_ , kmap_decon_= self.makemap(xy, w*mask)
+                    kmap               = kmap_ + kmap
+                    kmap_decon         = kmap_decon_ + kmap_decon
+
+
+            if self.ds>df:
+                zf = 1./af-1.
+                zi = 1./ai-1.
+                pos = (dx_out + q)
+                stdlib.watchpoint(pos, lambda pos, zf=zf, zi=zi, pm=self.pm, label=self.label: paint2mesh(pos,pm,zf=zf,zi=zi,label=label))
+
+            # force
+            f, potk = self.gravity(dx)
+
+            # kick
+            dp = f * (self.KickFactor(ac, af, af) * 1.5 * Om0)
+            p  = p + dp
+
+        kmap*=self.factor
+        kmap_decon*=self.factor
+        return dict(kmap=kmap, kmap_decon=kmap_decon)
+
 
 def run_wl_sim(params, num, cosmo, randseed = 187):
     '''

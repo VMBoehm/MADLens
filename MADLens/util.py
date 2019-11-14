@@ -40,7 +40,7 @@ def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=Fa
         n = None
 
     if k_max == None:     
-        k_max      = 20.*np.pi*(pm.Nmesh.max()/pm.BoxSize.min())
+        k_max      = max(20.*np.pi*(pm.Nmesh.max()/pm.BoxSize.min()),100.)
     if k_min == None:
         k_min      = 2.*np.pi*(1./pm.BoxSize.max())
         
