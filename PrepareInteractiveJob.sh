@@ -5,6 +5,7 @@ source /global/common/software/m3035/conda-activate.sh 3.7
 bcast-pip https://github.com/rainwoodman/vmad/archive/master.zip
 bcast-pip https://github.com/bccp/abopt/archive/master.zip
 bcast-pip https://github.com/rainwoodman/fastpm-python/archive/master.zip
+bcast-pip https://github.com/abseil/abseil-py/archive/master.zip
 
 export KMP_AFFINITY=disabled
 export MPICH_GNI_FORK_MODE=FULLCOPY
