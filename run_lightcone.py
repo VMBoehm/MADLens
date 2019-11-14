@@ -1,6 +1,6 @@
 import time
 start = time.time()
-from MADLens.lightcone import test_wl
+from MADLens.lightcone import run_wl_sim
 from nbodykit.cosmology import Planck15
 from MADLens.util import get_2Dpower, save_2Dmap
 import numpy as np
@@ -16,15 +16,14 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
 FLAGS = flags.FLAGS
-
-
 flags.DEFINE_string('results_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
+flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
 flags.DEFINE_float('boxsize',256.,'size of the simulation box in Mpc/h')
-flags.DEFINE_integer('Nmesh',64,'resolution of fastPM mesh')
+flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
-flags.DEFINE_float('boxsize2D',6.37617,'field of view in degrees')
-flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
+flags.DEFINE_float('boxsize2D',6.37616,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
+flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
@@ -36,13 +35,12 @@ flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires int
 flags.DEFINE_enum('mode', 'forward', ['forward','backprop'],'whether to run the forward model only or include backpropagation')
 flags.DEFINE_boolean('analyze', False, 'whether to print out resource usage')
 flags.DEFINE_string('label', 'myrun', 'label of this run')
-
 old_print = print
+
 def print(*args):
     if rank==0:
         old_print(args)
     return True
-
 
 def main(argv):
     del argv
@@ -106,7 +104,7 @@ def main(argv):
         
     for ii in range(FLAGS.N_maps):
         print('progress in percent:', ii/params['N_maps']*100)
-        kmaps, kmaps_deriv, pm = test_wl(params,cosmo=cosmo, num=ii)
+        kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=ii)
 
         for jj,z_source in enumerate(params['zs_source']):
             kmap    = kmaps[jj]

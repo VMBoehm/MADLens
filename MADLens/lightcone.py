@@ -136,15 +136,15 @@ class z_chi:
         return dict(z_ = res*chi_)
     
 
-def get_PGD_params(B,res,n_steps):
+def get_PGD_params(B,res,n_steps,pgd_dir):
     """
     loads PGD params from file 
     B:      force resolution parameter
     res:    resolution: Boxsize/Nmesh
     nsteps: number of fastpm steps
+    pgd_dir: directory in which PGD parameter files are stored
     """
 
-    pgd_dir = '../pgd_params/'
     pgd_file= os.path.join(pgd_dir,'pgd_params_%d_%d_%d.pkl'%(B,res,n_steps))
 
     if not os.path.isfile(pgd_file):
@@ -176,7 +176,7 @@ class ImageGenerator:
 
         self.BoxSize    = pm.BoxSize
         self.chi_source = ds 
-        self.vert_num   = vert_num
+        self.vert_num   = np.int32(vert_num)
         # basis vectors
         x      = np.asarray([1,0,0])
         y      = np.asarray([0,1,0])
@@ -233,38 +233,42 @@ class ImageGenerator:
 class WLSimulation(FastPMSimulation):
     def __init__(self, stages, cosmology, pm, params, boxsize2D):
         """
-        stages:    fastpm steps in scale factor
-        cosmology: nbodykit comsology object
+        stages:    1d array of floats. scale factors at which to evaluate fastpm simulation (fastpm steps)
+        cosmology: nbodykit cosmology object
         pm:        3D pmesh object
-        params:    run specifuc parameters
-        boxsize2D: fov in radians on to which to project
+        params:    dictionary, parameters for this run
+        boxsize2D: list, fov in radians
         """
 
         q = pm.generate_uniform_particle_grid(shift=0.)        
         FastPMSimulation.__init__(self, stages, cosmology, pm, params['B'], q)
 
+        # source redshifts and distances
         self.zs      = params['zs_source']
         self.ds      = np.asarray([cosmology.comoving_distance(zs) for zs in self.zs])
+        # maximal distance at which particles need to be read out
         self.max_ds  = max(self.ds)
         
+        # redshift as a function of comsoving distance for underlying cosmology
         z_int          = np.logspace(-8,np.log10(1500),10000)
         chis           = cosmology.comoving_distance(z_int) #Mpc/h
         self.z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind=3,bounds_error=False, fill_value=0.)
 
         #how many times to duplicate the box in x-y to span the observed area (probably not desired for machine learning!)
-        self.vert_num  = np.int32(np.ceil((max(boxsize2D)*max(self.ds))/pm.BoxSize[-1]))
+        self.vert_num  = (max(boxsize2D)*max(self.ds))/pm.BoxSize[-1]
         if pm.comm.rank==0:
-            print('number of box replications required to fill field of view: %d'%self.vert_num)
+            print('number of box replications required to fill field of view: %.1f'%self.vert_num)
 
+        # ImageGenerator defines box rotations and shifts
         self.imgen = ImageGenerator(pm,self.max_ds,self.vert_num)       
-        # 2D mesh for painting field, in radians
+        # 2D mesh object for convergence field
         self.mappm = ParticleMesh(BoxSize=boxsize2D, Nmesh=params['Nmesh2D'], comm=pm.comm, np=pm.np, resampler='cic')
         self.mappm.affine.period[...] = 0 # disable the periodicity
         
         self.cosmo = cosmology
         self.params= params
         if self.params['PGD']:
-            self.kl, self.ks, self.alpha0, self.mu = get_PGD_params(params['B'],res=pm.BoxSize[0]/pm.Nmesh[0],n_steps=params['N_steps'])
+            self.kl, self.ks, self.alpha0, self.mu = get_PGD_params(params['B'],res=pm.BoxSize[0]/pm.Nmesh[0],n_steps=params['N_steps'],pgd_dir=params['PGD_path'])
           
         # mean 3D particle density
         self.nbar    = pm.comm.allreduce(len(self.q))/pm.BoxSize.prod()
@@ -375,7 +379,7 @@ class WLSimulation(FastPMSimulation):
 
 
     @autooperator('rhok->kmaps')
-    def run(self, rhok):
+    def run_interpolated(self, rhok):
 
         def getrss():
             usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -414,7 +418,7 @@ class WLSimulation(FastPMSimulation):
 
             if self.params['PGD']:
                 alpha    = self.alpha0 * ac **self.mu
-                dx_PGD   = PGD_correction(self.q + dx, alpha, self.kl, self.ks, self.fpm, self.q)
+                dx_PGD   = PGD.PGD_correction(self.q + dx, alpha, self.kl, self.ks, self.fpm, self.q)
             else:
                 dx_PGD = 0.
 
@@ -439,33 +443,44 @@ class WLSimulation(FastPMSimulation):
         return dict(kmaps=kmaps)
 
 
-def test_wl(params, num, cosmo, randseed = 187):
+def run_wl_sim(params, num, cosmo, randseed = 187):
     '''
-    params:  dictionary of run specific settings
-    num:     number of this run (which out of N_maps)
+    params:  dictionary, of run specific settings
+    num:     int, number of this run (which run out of #N_maps)
     cosmo:   nbodykit cosmology object, see https://nbodykit.readthedocs.io/en/latest/index.html
-    label:   label of this run. used in filename if 3D matter distribution is saved
+    label:   string, label of this run. used in filename if 3D matter distribution is saved
     randseed:random seed for generating initial conditions
     '''
 
+    # particle mesh for fastpm simulation
     pm        = fastpm.ParticleMesh(Nmesh=params['Nmesh'], BoxSize=params['BoxSize'], comm=MPI.COMM_WORLD, resampler='cic')
+    
+    # 2D FOV in radians
     BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
 
     np.random.seed(randseed)
     randseeds = np.random.randint(0,1e6,100)
 
+    # generate initial conditions
     cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
     rho       = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
-    rho       = rho.c2r()
 
+    # weak lensing simulation object
     wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
 
-    model     = wlsim.run.build()
-    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho.r2c()))
+    #build
+    if params['interpolate']:
+        model     = wlsim.run_interpolated.build()
+    else:
+        model     = wlsim.run.build()
+
+    # compute
+    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
     
+    # compute derivative if requested 
     kmaps_deriv = None
     if params['mode']=='backprop': 
         kmap_deriv = model.compute_with_vjp(init=dict(rhok=rho.r2c()), v=dict(_kmap=kmap))
