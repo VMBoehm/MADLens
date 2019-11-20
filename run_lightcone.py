@@ -20,8 +20,8 @@ flags.DEFINE_string('results_path',os.path.join(os.getcwd(),'results/'), "path f
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
 flags.DEFINE_float('boxsize',256.,'size of the simulation box in Mpc/h')
-flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
-flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
+flags.DEFINE_integer('Nmesh',16,'resolution of fastPM mesh')
+flags.DEFINE_integer('Nmesh2D',256, 'resolution of lensing map')
 flags.DEFINE_float('boxsize2D',6.37616,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
@@ -30,8 +30,10 @@ flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bo
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
 flags.DEFINE_spaceseplist('zs_source',['1.'],'source redshifts')
-flags.DEFINE_boolean('interp',True,'whether to interpolate between snapshots')
+flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
+flags.DEFINE_boolean('debug',False,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
+flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
 flags.DEFINE_enum('mode', 'forward', ['forward','backprop'],'whether to run the forward model only or include backpropagation')
 flags.DEFINE_boolean('analyze', False, 'whether to print out resource usage')
 flags.DEFINE_string('label', 'myrun', 'label of this run')
@@ -66,7 +68,6 @@ def main(argv):
         results_path = os.path.join(FLAGS.results_path,githash)
         params_path  = os.path.join(os.path.join(os.getcwd()),'runs',githash)
         params['results_path'] = results_path
-        print(params_path, results_path)
         if not os.path.isdir(params_path):
             os.makedirs(params_path)
 
@@ -84,20 +85,25 @@ def main(argv):
             else:
                 with open(params_file, 'r') as f:
                     old_params = json.load(f)
-                    if old_params==params:
+                    if old_params==params and not params['debug']:
                         raise ValueError('run with same settings already exists: %s'%params_file)
+                    elif params['debug']:
+                        found = False
                     else:
                         num_run+=1
 
         for result in ['cls','maps','snapshots']:
             dirs[result] = os.path.join(path_name,result)
-            os.makedirs(dirs[result])
+            if not os.path.isdir(dirs[result]):
+                os.makedirs(dirs[result])
 
         fjson = json.dumps(params)
         f = open(params_file,"w")
         f.write(fjson)
         f.close()
-    dirs  = comm.bcast(dirs, root=0)
+
+    dirs                  = comm.bcast(dirs, root=0)
+    params['snapshot_dir']= dirs['snapshots']
 
     """---------------------------run actual simulations-----------------------------"""
     sims_start = time.time()

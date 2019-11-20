@@ -48,18 +48,19 @@ class list_put:
         pass
 
 
-def save3Dpower(mesh,zi,zf,params):
-    path = params['snapshot_path'] 
+def save3Dpower(mesh,ii,zi,zf,params):
     power = FFTPower(mesh, mode='1d')
     if mesh.pm.comm.rank==0:
-        pickle.dump([zi,zf,power],open(path+'power_z%d_%s.pkl'%(zf*100,label),'wb'))
+        pickle.dump([zi,zf,power],open(os.path.join(params['snapshot_dir'],'power_%d.pkl'%ii),'wb'))
     return True
 
-def paint2mesh(x,pm,zi,zf,params,dump_mesh=False,interlaced=True,compensated=True):
-    cat    = ArrayCatalog({'Position' : x}, BoxSize=pm.BoxSize)
-    mesh   = cat.to_mesh(Nmesh=pm.Nmesh, interlaced=interlaced, compensated=compensated, window='cic')
-    if dump_mesh:
-        save3Dpower(mesh,zi=zi,zf=zf,params=params)
+def save_snapshot(pos,ii,zi,zf,params):
+    cat    = ArrayCatalog({'Position' : pos}, BoxSize=params['BoxSize'])
+    mesh   = cat.to_mesh(Nmesh=params['Nmesh'], interlaced=True, compensated=True, window='cic')
+    if params['save3D']:
+        mesh.save(os.path.join(params['snapshot_dir'],'%d'%ii))
+    if params['save3Dpower']:
+        save3Dpower(mesh,ii,zi,zf,params)
     return True
 
 def get_interp_factors(x_,x,y):
@@ -393,7 +394,7 @@ class WLSimulation(FastPMSimulation):
         q      = self.q
         Om0    = pt.Om0
 
-        powers =[]
+        powers = []
         kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
         
         f, potk= self.gravity(dx)
@@ -429,9 +430,6 @@ class WLSimulation(FastPMSimulation):
             ddx = p * self.DriftFactor(ac, ac, af)
             dx  = dx + ddx
 
-            zf = 1./af-1.
-            zi = 1./ai-1.
-
             # force
             f, potk = self.gravity(dx)
 
@@ -442,7 +440,7 @@ class WLSimulation(FastPMSimulation):
         
         return dict(kmaps=kmaps)
 
-    @autooperator('rhok->kmap, kmap_decon')
+    @autooperator('rhok->kmaps')
     def run(self, rhok):
         import resource
         def getrss():
@@ -458,28 +456,28 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers =[]
-
-        kmap   = self.mappm.create('real', value=0)
-        kmap_decon = self.mappm.create('real', value=0)
+        kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
 
         f, potk= self.gravity(dx)
 
-        for ai, af, di, df in zip(stages[:-1], stages[1:], self.dstages[:-1], self.dstages[1:]):
+        ii = 0 
+        for ai, af in zip(stages[:-1], stages[1:]):
+            
+            di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+
+            
             # central scale factor
             ac = (ai * af) ** 0.5
 
-            #if self.pm.comm.rank == 0:
-            #    stdlib.watchpoint(f, lambda f, ai=ai: print('ai', ai, getrss()))
-
-            # kick
+            # kick (update momentum)
             dp = f * (self.KickFactor(ai, ai, ac) * 1.5 * Om0)
             p  = p + dp
 
-            # drift
+            # drift (update positions)
             ddx = p * self.DriftFactor(ai, ac, af)
             dx  = dx + ddx
 
-            if self.PGD:
+            if self.params['PGD']:
                 alpha    = self.alpha0*af**self.mu
                 dx_      = PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
             else:
@@ -489,45 +487,39 @@ class WLSimulation(FastPMSimulation):
 
             for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
-                if df>self.ds:
-                    pass
+                if df>self.max_ds:
+                    continue
                 else:
                     M, boxshift = M
-
-                    #if self.pm.comm.rank == 0:
-                    #    stdlib.watchpoint(f, lambda f, boxshift=boxshift: print('boxshift', boxshift, getrss()))
-
                     xy, d    = self.rotate((dx_out + q)%self.pm.BoxSize, M, boxshift)
-                    # positions of unevolved particles after rotation
                     d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=q))
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=self.ds, d_approx=d_approx :
-                                           1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
             
-                    xy = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )#*linalg.stack((d,d), axis=-1)/self.ds\
+                    xy       = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
 
+                    for ii, ds in enumerate(self.ds):
+                        w     = self.wlen(d,ds)
+                        mask  = stdlib.eval(d, lambda d, di=di, df=df, ds=self.ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                        kmap_ = self.makemap(xy, w*mask)*self.factor
+                        kmap  = list_elem(kmaps,ii)
+                        kmaps = list_put(kmaps,kmap_+kmap,ii)
 
-                    w  = self.wlen(d)
-                    kmap_ , kmap_decon_= self.makemap(xy, w*mask)
-                    kmap               = kmap_ + kmap
-                    kmap_decon         = kmap_decon_ + kmap_decon
+            
+            if self.params['save3D'] or self.params['save3Dpower']:
+                zf       = 1./af-1.
+                zi       = 1./ai-1.
+                pos      = (dx_out + q)
+                stdlib.watchpoint(pos,lambda pos, ii=ii,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params))
 
-
-            if self.ds>df:
-                zf = 1./af-1.
-                zi = 1./ai-1.
-                pos = (dx_out + q)
-                stdlib.watchpoint(pos, lambda pos, zf=zf, zi=zi, pm=self.pm, label=self.label: paint2mesh(pos,pm,zf=zf,zi=zi,label=label))
-
-            # force
+            # force (compute force)
             f, potk = self.gravity(dx)
 
-            # kick
+            # kick (update momentum)
             dp = f * (self.KickFactor(ac, af, af) * 1.5 * Om0)
             p  = p + dp
 
-        kmap*=self.factor
-        kmap_decon*=self.factor
-        return dict(kmap=kmap, kmap_decon=kmap_decon)
+            ii+=1
+
+        return kmaps
 
 
 def run_wl_sim(params, num, cosmo, randseed = 187):
