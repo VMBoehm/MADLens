@@ -9,6 +9,7 @@ import scipy
 from mpi4py import MPI
 import numpy as np
 import MADLens.PGD as PGD
+from MADLens.util import save_snapshot, save3Dpower
 from nbodykit.lab import FFTPower, ArrayCatalog
 import pickle
 import os
@@ -48,20 +49,6 @@ class list_put:
         pass
 
 
-def save3Dpower(mesh,ii,zi,zf,params):
-    power = FFTPower(mesh, mode='1d')
-    if mesh.pm.comm.rank==0:
-        pickle.dump([zi,zf,power],open(os.path.join(params['snapshot_dir'],'power_%d.pkl'%ii),'wb'))
-    return True
-
-def save_snapshot(pos,ii,zi,zf,params):
-    cat    = ArrayCatalog({'Position' : pos}, BoxSize=params['BoxSize'])
-    mesh   = cat.to_mesh(Nmesh=params['Nmesh'], interlaced=True, compensated=True, window='cic')
-    if params['save3D']:
-        mesh.save(os.path.join(params['snapshot_dir'],'%d'%ii))
-    if params['save3Dpower']:
-        save3Dpower(mesh,ii,zi,zf,params)
-    return True
 
 def get_interp_factors(x_,x,y):
     indices = np.searchsorted(x, x_)
@@ -328,20 +315,6 @@ class WLSimulation(FastPMSimulation):
         
         return map
             
-    @autooperator('x->map')
-    def make3Dmap(self,x):
-        """
-        paint particle to 3D map (required if dumping snapshots)
-        """
-        compensation = self.pm.resampler.get_compensation()
-        w = 1./self.nbar
-        layout       = fastpm.decompose(x, self.pm)
-        map          = fastpm.paint(x, w, layout, self.pm)
-        # compensation for cic window
-        c            = fastpm.r2c(map)
-        c            = fastpm.apply_transfer(c, lambda k : compensation(k, 1.0), kind='circular')
-        map          = fastpm.c2r(c)
-        return map
 
     # can we remove p here?
     @autooperator('dx, p, kmaps->kmaps')

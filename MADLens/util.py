@@ -2,6 +2,7 @@ import numpy as np
 import scipy
 import json
 import os
+import pickle
 from nbodykit.cosmology import Planck15, LinearPower
 from nbodykit.lab import *
 from vmad.lib.fastpm import ParticleMesh
@@ -129,6 +130,20 @@ def save_2Dmap(x,filename):
         np.save(filename,x_array)
     return True
 
+def save3Dpower(mesh,ii,zi,zf,params):
+    power = FFTPower(mesh, mode='1d')
+    if mesh.pm.comm.rank==0:
+        pickle.dump([zi,zf,power],open(os.path.join(params['snapshot_dir'],'power_%d.pkl'%ii),'wb'))
+    return True
+
+def save_snapshot(pos,ii,zi,zf,params):
+    cat    = ArrayCatalog({'Position' : pos}, BoxSize=params['BoxSize'])
+    mesh   = cat.to_mesh(Nmesh=params['Nmesh'], interlaced=True, compensated=True, window='cic')
+    if params['save3D']:
+        mesh.save(os.path.join(params['snapshot_dir'],'%d'%ii))
+    if params['save3Dpower']:
+        save3Dpower(mesh,ii,zi,zf,params)
+    return True
 
 class Run():
     """

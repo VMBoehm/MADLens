@@ -58,6 +58,11 @@ def main(argv):
     cosmo = Planck15.match(Omega0_m=FLAGS.Omega_m)
     cosmo = cosmo.match(sigma8=FLAGS.sigma_8)
 
+    if params['save3D'] or params['save3Dpower']:
+        try:
+            assert(params['interpolate']==False)
+        except:
+            raise ValueError('interpolate must be set to False if requesting 3D outouts')
 
     """------- setting output dirs and saving parameters-----------"""
     dirs = {} 
