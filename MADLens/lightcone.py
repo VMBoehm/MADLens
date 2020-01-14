@@ -62,7 +62,18 @@ def get_interp_factors(x_,x,y):
     factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
     return factors
 
+def deriv_integral(x, omega0_m):
+    """
+    Derivative of the comoving distance with respect to matter density
     
+    """
+    
+    #Create the denominator of the integral
+    E = (omega0_m * ((1+x)**3 -1)+ 1)**(-3/2)
+    
+    diriv_factor = (-1/2) * ((1+x)**3-1)
+
+    return E*diriv_factor   
 
 #TODO: add support for derivative here
 @operator
@@ -83,24 +94,35 @@ class DriftFactor:
     def jvp(node,af_,ai,ac,pt):
         pass#factors = get_interpolation_factors(af_,pt.)
 
+#Max's Operator for matter
 @operator
 class chi_z:
-    """
-    go from comsoving distance to redshift
-    """
-    ain  = {'z' : 'ndarray'}
-    aout = {'chi': 'ndarray'}
+    ain  = {'omega0_m': 'float'}
+    aout = {'chi':'float'}
 
-    def apl(node, z, cosmo):
-        return dict(chi = cosmo.comoving_distance(z))
+    def apl(node, omega0_m, z, cosmo):
+        #Calculate the integral from 0->z
+        E         = lambda x: (omega0_m  * ((1+x)**3 -1)+1)**(-1/2)
+        Dc , _    = quad(E, 0, z)
+        return dict(chi = Dc*cosmo.C/cosmo.H0)
     
-    def vjp(node, _chi, z, cosmo):
-        res = 1./cosmo.efunc(z)/cosmo.H0*cosmo.C
-        return dict(_z = numpy.multiply(res,_chi))
+    def vjp(node, _chi, omega0_m, z, cosmo):
+        
+        #Return the derivative of the integral WR2 omega0_m and mult by _chi
+        _omega0_m  =  _chi  *  quad(deriv_integral, 0, z, args=(omega0_m))[0] 
+        
+        
+        #Multiply by hubble distance and return
+        return dict(_omega0_m = _omega0_m*cosmo.C/cosmo.H0)
     
-    def jvp(node, z_, z, cosmo):
-        res = 1./cosmo.efunc(z)/cosmo.H0*cosmo.C
-        return dict(chi_ = numpy.multiply(res,z_))
+    def jvp(node, omega0_m_, omega0_m, z, cosmo):
+        
+        #Find derivative with respevct to omega_0 and mult by omega0_m_
+        omega0_m_   *= omega0_m_ * quad(deriv_integral, 0, z, args=(omega0_m))[0]
+        
+                
+        #Multiply by hubble distance
+        return dict(chi_ = omega0_m_*cosmo.C/cosmo.H0)
     
     
 @operator
@@ -317,14 +339,16 @@ class WLSimulation(FastPMSimulation):
             
 
     # can we remove p here?
-    @autooperator('dx, p, kmaps->kmaps')
-    def interp(self, dx, p, kmaps, dx_PGD, ax, ap, ai, af):
+    @autooperator('dx, p, kmaps, omega0_m ->kmaps')
+    def interp(self, dx, p, kmaps, omega0_m, dx_PGD, ax, ap, ai, af):
 
-        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+        di = chi_z(1. /ai - 1., omega0_m, self.cosmo)
+        df = chi_z(1. /af - 1., omega0_m, self.cosmo)
 
         for M in self.imgen.generate(di, df):
             # if lower end of box further away than source -> do nothing
-            if df>self.max_ds:
+            df_bool = stdlib.eval(df, lambda df: True if df>self.max_ds else False)
+            if df_bool:
                 continue
             else:
                 M, boxshift = M
@@ -352,7 +376,7 @@ class WLSimulation(FastPMSimulation):
         return kmaps
 
 
-    @autooperator('rhok->kmaps')
+    @autooperator('rhok, omega0_m->kmaps')
     def run_interpolated(self, rhok):
 
         def getrss():
@@ -436,7 +460,8 @@ class WLSimulation(FastPMSimulation):
         ii = 0 
         for ai, af in zip(stages[:-1], stages[1:]):
             
-            di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+            di = chi_z(1. /ai - 1., omega0_m, self.cosmo)
+            df = chi_z(1. /af - 1., omega0_m, self.cosmo)
 
             
             # central scale factor
@@ -460,7 +485,8 @@ class WLSimulation(FastPMSimulation):
 
             for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
-                if df>self.max_ds:
+                df_bool = stdlib.eval(df, lambda df: True if df>self.max_ds else False)
+                if df_bool:
                     continue
                 else:
                     M, boxshift = M
@@ -530,7 +556,7 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         model     = wlsim.run.build()
 
     # compute
-    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
+    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho, omega0_m=cosmo.Omega0_m))
     
     # compute derivative if requested 
     kmaps_deriv = None

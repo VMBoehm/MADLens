@@ -52,7 +52,7 @@ def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=Fa
     
     def W_lens(chis,chimax):
         return chis*(chimax-chis)/chimax 
-    
+    print(ells[1], ells[-1])
     result = []
     for l_ in ells:
         integrand=[]
@@ -101,6 +101,7 @@ def get_2Dpower(x1, x2=None,dk= None, kmin=None):
         dk = 2 * np.pi / min(x1.BoxSize)*2
     if kmin is None:
         kmin = dk
+        print(dk)
         
     kedges  = np.arange(kmin, np.pi*min(x1.Nmesh)/max(x1.BoxSize) + dk/2, dk)
     kedges  = np.append(kedges,2*np.pi*min(x1.Nmesh)/max(x1.BoxSize)+dk)
