@@ -1,4 +1,4 @@
-from vmad import autooperator, operator
+from vmad import autooperator, operator, Builder
 from vmad.core import stdlib
 from vmad.lib import fastpm
 from vmad.lib import linalg
@@ -11,6 +11,7 @@ import numpy as np
 import MADLens.PGD as PGD
 from MADLens.util import save_snapshot, save3Dpower
 from nbodykit.lab import FFTPower, ArrayCatalog
+from MADLens.power import get_pklin
 import pickle
 import os
 import errno
@@ -512,11 +513,14 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
 
     np.random.seed(randseed)
     randseeds = np.random.randint(0,1e6,100)
-
+    
+    #Build power operator for initial conditions
+    pklin_init      = dict(Omega0_m=cosmo.Omega0_m)
     # generate initial conditions
     cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
-    rho       = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
+    rho       = rho.apply(lambda k, v:(get_pklin.build(Omega0_b = cosmo.Omega0_b, h=cosmo.h, Tcmb0=cosmo.Tcmb0, C=cosmo.C, \
+                                        H0=cosmo.H0, n=cosmo.n_s, z=params['zs_source'], k=k).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
 

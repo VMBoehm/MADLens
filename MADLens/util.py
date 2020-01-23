@@ -7,8 +7,6 @@ from nbodykit.cosmology import Planck15, LinearPower
 from nbodykit.lab import *
 from vmad.lib.fastpm import ParticleMesh
 from pmesh.pm import RealField, ComplexField
-from MADLens.power import power
-from vmad import Builder
 
 
 def a2z(a):
@@ -23,61 +21,8 @@ def z2a(z):
     """
     return 1./(1.+z)
 
+
 def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=False):
-    """
-    computes clkk from halofit Pk for given 
-    ells: 1D array, scales at which to compute clkk
-    z_source: float, source_redshift
-    cosmo: nbodykit cosmology object
-    z_chi_int: function, computes redshift for given comoving distance (must be compatible with cosmo)
-    pm: ParticleMesh object (resolution of fastpm simulation, that one wants to compare to) 
-    k_min: float (optional), minimal k to use in Pk
-    k_max: float (optional), maximal k to use in Pk
-    shotnoise, bool (optional), if true, add estimate of shotnoise in the simulation to Pk
-    """
-    print('working')
-    if shotnoise:
-        #not strictly correct
-        n = pm.Nmesh.prod()/pm.BoxSize.prod()
-    else:
-        n = None
-
-    if k_max == None:     
-        k_max      = max(20.*np.pi*(pm.Nmesh.max()/pm.BoxSize.min()),100.)
-    if k_min == None:
-        k_min      = 2.*np.pi*(1./pm.BoxSize.max())
-        
-    factor     = 3./2.*cosmo.Omega0_m*(cosmo.H0/cosmo.C)**2 
-    cosmo      = cosmo.clone(P_k_max=max(k_max*2.,200), perturb_sampling_stepsize=0.01,nonlinear=True)
-    chi_source = cosmo.comoving_distance(z_source)
-    chis       = np.linspace(0.5,chi_source,1000)
-    
-    def W_lens(chis,chimax):
-        return chis*(chimax-chis)/chimax 
-    init = cosmo.Omega0_m
-    result = []
-    for l_ in ells:
-        integrand=[]
-        for chi in chis:
-            k = l_/chi #in h/Mpc
-            z = z_chi_int(chi)
-            if (k>k_min)*(k<k_max):
-                Pk_model = power.build(k=k, z=z, n=1, theta_cmb = cosmo.T0_cmb/2.7, cosmo=cosmo)
-                Pk = Pk_model.compute(init = init, vout = 'P')
-
-                # Pk = cosmo.get_pk(k,z)
-                if shotnoise:
-                    #not strictly correct for los
-                    Pk+=1./(n)
-            else:
-                Pk = 0.
-            # use Limber approximation
-            integrand+=[W_lens(chi,chi_source)**2/chi**2*Pk*(1.+z)**2]
-        
-        result+=[np.trapz(integrand, chis)]
-    return np.asarray(result)*factor**2
-
-def get_Cell_van(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=False):
     """
     computes clkk from halofit Pk for given 
     ells: 1D array, scales at which to compute clkk
