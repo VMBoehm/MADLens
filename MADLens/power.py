@@ -21,28 +21,28 @@ class log:
 
 @operator
 class amplitude:
-    ain  = 'omega0_m'
-    aout = 'delta_h' 
-    
+    ain = 'omega0_m'
+    aout = 'delta_h'
+
     def apl(node, omega0_m, n):
-        factor_1 = 1.94e-5*omega0_m**(-.785-.05*np.log(omega0_m))
-        factor_2 = np.e**(-.95*(n-1)-.169*(n-1)**2)
-        
-        return dict(delta_h = factor_1*factor_2)
+        factor_1 = 1.94e-5 * omega0_m**(-.785 - .05 * np.log(omega0_m))
+        factor_2 = np.e**((n-1) + 1.97 * (n-1)**2)
+
+        return dict(delta_h=factor_1 * factor_2)
 
     def vjp(node, _delta_h, omega0_m, n):
         factor_1 = 1.94e-5*(-.785+.05*np.log(omega0_m))*.05/omega0_m\
                     * omega0_m**(-1.785-.05*np.log(omega0_m))
-        
-        factor_2 = np.e**(-.95*(n-1)-.169*(n-1)**2)
-        return dict(_omega0_m = factor_1*factor_2*_delta_h)
-    
+
+        factor_2 = np.e**((n - 1) + 1.97 * (n - 1)**2)
+        return dict(_omega0_m=factor_1 * factor_2 * _delta_h)
+
     def jvp(node, omega0_m_, omega0_m, n):
         factor_1 = 1.94e-5*(-.785+.05*np.log(omege0_m))*.05/omega0_m \
                     * omega0_m**(-1.785-.05*np.log(omega0_m))
-        factor_2 = np.e**(-.95*(n-1)-.169*(n-1)**2)
-        
-        return dict(delta_h_ = factor_1*factor_2*omega0_m_)
+        factor_2 = np.e**((n - 1) + 1.97* (n - 1)**2)
+
+        return dict(delta_h_=factor_1 * factor_2 * omega0_m_)
 
 @operator
 class growth:
