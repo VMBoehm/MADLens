@@ -3,6 +3,7 @@ from vmad.core import stdlib
 from vmad.lib import fastpm
 from vmad.lib import linalg
 from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
+from nbodykit.cosmology import Planck15
 import numpy
 from vmad.lib.linalg import sum, mul
 import scipy 
@@ -256,8 +257,13 @@ class WLSimulation(FastPMSimulation):
         # source redshifts and distances
         self.zs      = params['zs_source']
         self.ds      = np.asarray([cosmology.comoving_distance(zs) for zs in self.zs])
+        
         # maximal distance at which particles need to be read out
         self.max_ds  = max(self.ds)
+        # maximal distance for for overshoot
+        Omega0_m_undershoot = cosmology.Omega0_m - params['Omega0_m_sigma']*params['undershoot']
+        cosmology_overshoot = Planck15.match(Omega0_m = Omega0_m_undershoot)
+        self.max_df  = cosmology_overshoot.comoving_distance(2) 
         
         # redshift as a function of comsoving distance for underlying cosmology
         z_int          = np.logspace(-8,np.log10(1500),10000)
@@ -344,11 +350,11 @@ class WLSimulation(FastPMSimulation):
 
         di = chi_z(1. /ai - 1., omega0_m, self.cosmo)
         df = chi_z(1. /af - 1., omega0_m, self.cosmo)
-
-        for M in self.imgen.generate(di, df):
+        df_value = self.cosmo.comoving_distance(1./af-1. )
+        di_value = self.cosmo.comoving_distance(1./ai - 1.)
+        for M in self.imgen.generate(di_value, df_value):
             # if lower end of box further away than source -> do nothing
-            df_bool = stdlib.eval(df, lambda df: True if df>self.max_ds else False)
-            if df_bool:
+            if self.max_df>self.max_ds:
                 continue
             else:
                 M, boxshift = M
@@ -377,7 +383,7 @@ class WLSimulation(FastPMSimulation):
 
 
     @autooperator('rhok, omega0_m->kmaps')
-    def run_interpolated(self, rhok):
+    def run_interpolated(self, rhok, omega0_m):
 
         def getrss():
             usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -421,7 +427,7 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p, kmaps, dx_PGD, ac, ac, ai, af)
+            kmaps = self.interp(dx, p, kmaps,omega0_m, dx_PGD, ac, ac, ai, af)
 
             # drift
             ddx = p * self.DriftFactor(ac, ac, af)
@@ -485,8 +491,7 @@ class WLSimulation(FastPMSimulation):
 
             for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
-                df_bool = stdlib.eval(df, lambda df: True if df>self.max_ds else False)
-                if df_bool:
+                if self.max_df>self.max_ds:
                     continue
                 else:
                     M, boxshift = M
