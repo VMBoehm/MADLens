@@ -36,7 +36,7 @@ flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires int
 flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
 flags.DEFINE_enum('mode', 'forward', ['forward','backprop'],'whether to run the forward model only or include backpropagation')
 flags.DEFINE_boolean('analyze', False, 'whether to print out resource usage')
-flags.DEFINE_string('label', 'myrun', 'label of this run')
+flags.DEFINE_string('label', 'test_run', 'label of this run')
 old_print = print
 
 def print(*args):
