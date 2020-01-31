@@ -21,7 +21,6 @@ def z2a(z):
     """
     return 1./(1.+z)
 
-
 def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=False):
     """
     computes clkk from halofit Pk for given 
@@ -150,7 +149,7 @@ class Run():
     """
     class that holds results of a single run
     """
-    def __init__(self, githash, label, rnum, local_path, cell_type):
+    def __init__(self, githash, label, rnum, local_path):
         """
         loads the parameter file of the run
         githash: string, abridged githash of commit under which the run was performed
@@ -183,7 +182,6 @@ class Run():
         chis       = cosmo.comoving_distance(z_int) #Mpc/h
         self.z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind=3,bounds_error=False, fill_value=0.)
         
-        self.cell_type=cell_type
         self.theory_cls   = {}
         self.measured_cls = {}
         
@@ -193,7 +191,7 @@ class Run():
         """
         for zs in self.params['zs_source']:
             self.get_measured_cls(zs)
-            self.get_theory_cl(self.measured_cls[str(zs)]['L'],zs, self.cell_type)
+            self.get_theory_cl(self.measured_cls[str(zs)]['L'],zs)
             
         return True
         
@@ -205,12 +203,8 @@ class Run():
             assert(z_source in self.params['zs_source'])
         except:
             raise ValueError('%.1f not in '%z_source, self.params['zs_source'])
-        
-        if self.cell_type=='van':   
-            res = get_Cell_van(cosmo=self.cosmo,ells=bink,z_source=z_source, z_chi_int=self.z_chi_int, pm=self.pm)
-        else:
-            res = get_Cell(cosmo=self.cosmo,ells=bink,z_source=z_source, z_chi_int=self.z_chi_int, pm=self.pm)
-
+            
+        res = get_Cell(cosmo=self.cosmo,ells=bink,z_source=z_source, z_chi_int=self.z_chi_int, pm=self.pm)
         
         self.theory_cls[str(z_source)] = {}
         self.theory_cls[str(z_source)]['L'] = bink
