@@ -88,12 +88,12 @@ def get_2Dpower(x1, x2=None,dk= None, kmin=None):
         pass
     else:
         x2 = x1
-        
+    
+    
     if isinstance(x1,RealField):
         x1 = x1.r2c()
     if isinstance(x2,RealField):
         x2 = x2.r2c()
-
     assert(np.all(x1.Nmesh==x2.Nmesh))
     assert(np.all(x1.BoxSize==x2.BoxSize))
 
@@ -221,13 +221,19 @@ class Run():
             assert(z_source in self.params['zs_source'])
         except:
             raise ValueError('%.1f not in '%z_source, self.params['zs_source'])
-            
-        clfile = os.path.join(self.dirs['cls'],'mean_cl_zsource%d_averaged_over_%dmaps.npy'%(z_source*10,self.params['N_maps']))
-        res    = np.load(clfile)
         
+        CLkk=[]
+        for ii in range(self.params['N_maps']):
+            kmap = self.get_map(z_source,ii)
+            L, clkk, N = get_2Dpower(kmap)
+            CLkk.append(clkk)
+
+        CLkk = np.asarray(CLkk)
         self.measured_cls[str(z_source)]={}
-        for ii, tag in enumerate(['L','clkk','clkk_std','N']):
-            self.measured_cls[str(z_source)][tag] = res[ii]
+        self.measured_cls[str(z_source)]['L'] = L
+        self.measured_cls[str(z_source)]['N'] = N
+        self.measured_cls[str(z_source)]['clkk'] = np.mean(CLkk,axis=0)
+        self.measured_cls[str(z_source)]['clkk_std'] = np.std(CLkk,axis=0)
         
         return True
     
