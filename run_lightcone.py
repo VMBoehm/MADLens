@@ -31,14 +31,14 @@ flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
 flags.DEFINE_spaceseplist('zs_source',['1.','1.5'],'source redshifts')
-flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
+flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
 flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
 flags.DEFINE_enum('mode', 'forward', ['forward','backprop'],'whether to run the forward model only or include backpropagation')
 flags.DEFINE_boolean('analyze', False, 'whether to print out resource usage')
 #flags.DEFINE_string('label', 'test_run', 'label of this run')
-flags.DEFINE_string('parameter_file','S_8_test_run_40_noPGD_interp', 'which parameter file to read cosmology and fov from')
+flags.DEFINE_string('parameter_file','S_8_test_run', 'which parameter file to read cosmology and fov from')
 old_print = print
 
 def print(*args):
