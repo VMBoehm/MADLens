@@ -24,7 +24,7 @@ flags.DEFINE_float('boxsize',256,'size of the simulation box in Mpc/h')
 flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
 #flags.DEFINE_float('boxsize2D',6.37616,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
-flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
+flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 #flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
 #flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
