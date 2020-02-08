@@ -22,7 +22,7 @@ flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to 
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
 flags.DEFINE_float('boxsize',256,'size of the simulation box in Mpc/h')
 flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
-flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
+flags.DEFINE_integer('Nmesh2D',4096, 'resolution of lensing map')
 #flags.DEFINE_float('boxsize2D',6.37616,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
@@ -52,7 +52,7 @@ def main(argv):
     """ -------------- setting paramaeters ------------------------"""
     params              = FLAGS.flag_values_dict() 
     
-    fov_max,Omega_ms,sigma8s = pickle.load(open(os.path.join('./run_specs',params['parameter_file']+'.pkl'),'rb'))
+    _,fov_max,Omega_ms,sigma8s = pickle.load(open(os.path.join('./run_specs',params['parameter_file']+'.pkl'),'rb'))
 		
     for nn, (Omega_m,sigma_8) in enumerate(zip(Omega_ms,sigma8s)):
         params['Nmesh']     = [FLAGS.Nmesh]*3
