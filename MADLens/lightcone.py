@@ -354,7 +354,7 @@ class WLSimulation(FastPMSimulation):
         di_value = self.cosmo.comoving_distance(1./ai - 1.)
         for M in self.imgen.generate(di_value, df_value):
             # if lower end of box further away than source -> do nothing
-            if self.max_df>self.max_ds:
+            if df_value>self.max_ds:
                 continue
             else:
                 M, boxshift = M
