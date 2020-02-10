@@ -16,7 +16,7 @@ import pickle
 import os
 import errno
 import resource
-
+from scipy.integrate import quad
 
 @operator
 class list_elem:
@@ -374,7 +374,8 @@ class WLSimulation(FastPMSimulation):
                     
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+
+                    mask     = stdlib.eval([d,di,df], lambda args, ds=ds, d_approx=d_approx: 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0]<=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor
                     kmap     = list_elem(kmaps, ii)
                     kmaps    = list_put(kmaps,kmap_+kmap,ii)
