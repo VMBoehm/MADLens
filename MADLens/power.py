@@ -55,7 +55,8 @@ def get_pklin(Omega0_m, Omega0_b, h, Tcmb0, C, H0, n, z, k):
 
     alpha_gamma = sub(1, add(mul(mul(0.328, log(431*Omh2)), f_baryon), \
                         mul(mul(0.38, log(22.3*Omh2)), power(f_baryon, 2))))
-    
+    #zeromode=1 conserves mean
+    k = k.normp(p=2,zeromode=1)
     k = k * h  # in 1/Mpc now
     ks = mul(k, div(sound_horizon, h))
     q = div(k, mul(13.41, k_eq))

@@ -520,7 +520,7 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
     rho       = rho.apply(lambda k, v:(get_pklin.build(Omega0_b = cosmo.Omega0_b, h=cosmo.h, Tcmb0=cosmo.Tcmb0, C=cosmo.C, \
-                                        H0=cosmo.H0, n=cosmo.n_s, z=params['zs_source'], k=k).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
+                                        H0=cosmo.H0, n=cosmo.n_s, z=0, k=k).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
 
