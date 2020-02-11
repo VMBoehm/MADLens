@@ -52,7 +52,7 @@ def main(argv):
     """ -------------- setting paramaeters ------------------------"""
     params              = FLAGS.flag_values_dict() 
     
-    _,fov_max,Omega_ms,sigma8s = pickle.load(open(os.path.join('./run_specs',params['parameter_file']+'.pkl'),'rb'))
+    _,fov_max,Omega_ms,sigma8s,_,Pk_interp = pickle.load(open(os.path.join('./run_specs',params['parameter_file']+'.pkl'),'rb'))
 		
     for nn, (Omega_m,sigma_8) in enumerate(zip(Omega_ms,sigma8s)):
         params['Nmesh']     = [FLAGS.Nmesh]*3
@@ -103,7 +103,7 @@ def main(argv):
             
         for ii in range(FLAGS.N_maps):
             print('progress in percent:', ii/params['N_maps']*100)
-            kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=nn)
+            kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=nn, Pk = Pk_interp[nn])
     
             for jj,z_source in enumerate(params['zs_source']):
                 kmap    = kmaps[jj]
