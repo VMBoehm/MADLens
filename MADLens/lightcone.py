@@ -11,7 +11,7 @@ import numpy as np
 import MADLens.PGD as PGD
 from MADLens.util import save_snapshot, save3Dpower
 from nbodykit.lab import FFTPower, ArrayCatalog
-from MADLens.power import get_Pk_EH, get_Pk_EHNW
+from MADLens.power import get_Pk_EH, get_Pk_NWEH, normalize
 import pickle
 import os
 import errno
@@ -515,11 +515,12 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     randseeds = np.random.randint(0,1e6,100)
 
     #Build power operator for initial conditions
-    pklin_init      = dict(Omega0_m=cosmo.Omega0_m, transfer='EHNW')
+    pklin_init      = dict(Omega0_m=cosmo.Omega0_m)
+    norm = normalize(8,params['sigma_8'], transfer='NWEH', kmin=1e-5, kmax=1e1)
     # gerate initial conditions
     cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
-    rho       = rho.apply(lambda k, v:(get_Pk_EHNW.build(Omega0_b = cosmo.Omega0_b, h=cosmo.h, Tcmb0=cosmo.Tcmb0, C=cosmo.C, \
+    rho       = rho.apply(lambda k, v:(norm*get_Pk_EHNW.build(Omega0_b = cosmo.Omega0_b, h=cosmo.h, Tcmb0=cosmo.Tcmb0, C=cosmo.C, \
                                         H0=cosmo.H0, n=cosmo.n_s, z=0, k=k).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)

@@ -8,7 +8,7 @@ from vmad.lib.unary import log
 from vmad.lib.unary import sinc, exp
 
 
-def normalize(r,sigma_8, transfer='EH', kmin=1e-5, kmax=1e1):
+def normalize(r,sigma_8,cosmo,transfer='EH', kmin=1e-5, kmax=1e1):
     r"""
     The mass fluctuation within a sphere of radius ``r``, in
     units of :math:`h^{-1} Mpc` at ``redshift``.
@@ -83,17 +83,17 @@ def get_omega_lambda(omega0_m, z):
 
 
 @autooperator('Omega0_m->Pk')
-def get_Pk_EHNW(Omega0_m, Omega0_b, h, Tcmb0, C, H0, n, z, k):
+def get_Pk_NWEH(cosmo, z, k):
 
-    Obh2 = Omega0_b * h**2
-    Omh2 = mul(Omega0_m, power(h, 2))
-    f_baryon = div(Omega0_b, Omega0_m)
+    Obh2 =cosmo.Omega0_b * cosmo.h**2
+    Omh2 = mul(Omega0_m, power(cosmo.h, 2))
+    f_baryon = div(cosmo.Omega0_b, Omega0_m)
 
-    theta_cmb = Tcmb0 / 2.7
+    theta_cmb = cosmo.Tcmb0 / 2.7
 
     k_eq = mul(mul(0.0746, Omh2), power(theta_cmb, -2))  # units of 1/Mpc
 
-    sound_horizon = div(mul(h * 44.5, log(div(9.83, Omh2))),
+    sound_horizon = div(mul(cosmo.h * 44.5, log(div(9.83, Omh2))),
                         np.sqrt(1 + 10 * Obh2**0.75))  # in Mpc/h
 
 
@@ -101,8 +101,8 @@ def get_Pk_EHNW(Omega0_m, Omega0_b, h, Tcmb0, C, H0, n, z, k):
                         mul(mul(0.38, log(22.3*Omh2)), power(f_baryon, 2))))
     #zeromode=1 conserves mean
     k = k.normp(p=2,zeromode=1)
-    k = k * h  # in 1/Mpc now
-    ks = mul(k, div(sound_horizon, h))
+    k = k * cosmo.h  # in 1/Mpc now
+    ks = mul(k, div(sound_horizon, cosmo.h))
     q = div(k, mul(13.41, k_eq))
 
     gamma_eff = mul(
@@ -122,7 +122,7 @@ def get_Pk_EHNW(Omega0_m, Omega0_b, h, Tcmb0, C, H0, n, z, k):
     growth_z = grow(omega_zs, omega_lambdas, z)
 
     ###ADD AMPLITUDE###
-    delta_h = amplitude(Omega0_m, n)
+    delta_h = amplitude(Omega0_m, cosmo.n_s)
 
     ###ADD FACTOR###
     factor = 2 * np.pi**2 / (k)**3 * (C * k / H0)**(3 + n)
