@@ -103,7 +103,7 @@ def main(argv):
             
         for ii in range(FLAGS.N_maps):
             print('progress in percent:', ii/params['N_maps']*100)
-            kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=nn, Pk = Pk_interp[nn])
+            kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=nn, pk = Pk_interp[nn])
     
             for jj,z_source in enumerate(params['zs_source']):
                 kmap    = kmaps[jj]
