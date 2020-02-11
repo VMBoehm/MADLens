@@ -517,7 +517,7 @@ def run_wl_sim(params, num, cosmo, pk, randseed = 187):
     # generate initial conditions
     #cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
-    rho       = rho.apply(lambda k, v:(pk(k.normp(2,zeromode=1) ** 0.5) / pm.BoxSize.prod()) ** 0.5 * v)
+    rho       = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2,zeromode=1) ** 0.5,0) / pm.BoxSize.prod()) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
 
