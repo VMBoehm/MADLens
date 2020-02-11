@@ -137,7 +137,7 @@ def get_Pk_NWEH(Omega0_m, cosmo, z, k):
 def f(a,b,q):
     return dict(c =div( a , add(a ,mul( b,power(q,2)))))
 
-@autooperator('Omega0_m->Pk, t, g')
+@autooperator('Omega0_m->Pk')
 def get_Pk_EH(Omega0_m, cosmo, z, k):
 
     Obh2 = cosmo.Omega0_b * cosmo.h ** 2
@@ -184,7 +184,6 @@ def get_Pk_EH(Omega0_m, cosmo, z, k):
     beta_node = mul(8.41, power(Omh2, 0.435))
     beta_b    = add(add(0.5, f_baryon), mul(sub(3., mul(2.,f_baryon)),power( add(power(mul(17.2,Omh2), 2), 1 ), .5)))
 
-    k = k.normp(p=2,zeromode=1)
     k = k * cosmo.h # now in 1/Mpc
 
     q = div(k, mul(13.41,k_eq))
@@ -236,4 +235,4 @@ def get_Pk_EH(Omega0_m, cosmo, z, k):
     Pk = mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor)
 
 
-    return dict(Pk=Pk, t=T, g = growth_z/growth_0)
+    return dict(Pk=Pk)
