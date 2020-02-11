@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -C haswell
-#SBATCH -q regular
+#SBATCH -q premium 
 #SBATCH -J small_run
 #SBATCH --mail-user=vboehm@berkeley.edu
 #SBATCH --mail-type=ALL
-#SBATCH -t 03:00:00
+#SBATCH -t 01:00:00
 
 source /global/common/software/m3035/conda-activate.sh 3.7
 bcast-pip https://github.com/rainwoodman/vmad/archive/master.zip
