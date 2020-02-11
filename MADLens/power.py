@@ -83,7 +83,7 @@ def get_omega_lambda(omega0_m, z):
 
 
 @autooperator('Omega0_m->Pk')
-def get_Pk_NWEH(cosmo, z, k):
+def get_Pk_NWEH(Omega0_m, cosmo, z, k):
 
     Obh2 =cosmo.Omega0_b * cosmo.h**2
     Omh2 = mul(Omega0_m, power(cosmo.h, 2))
@@ -100,7 +100,7 @@ def get_Pk_NWEH(cosmo, z, k):
     alpha_gamma = sub(1, add(mul(mul(0.328, log(431*Omh2)), f_baryon), \
                         mul(mul(0.38, log(22.3*Omh2)), power(f_baryon, 2))))
     #zeromode=1 conserves mean
-    k = k.normp(p=2,zeromode=1)
+    #k = k.normp(p=2,zeromode=1)
     k = k * cosmo.h  # in 1/Mpc now
     ks = mul(k, div(sound_horizon, cosmo.h))
     q = div(k, mul(13.41, k_eq))
@@ -121,15 +121,15 @@ def get_Pk_NWEH(cosmo, z, k):
     omega_lambdas = get_omega_lambda(Omega0_m, z)
     growth_z = grow(omega_zs, omega_lambdas, z)
 
+    omega_z0 = get_omega_z(Omega0_m, 0)
+    omega_lambda0 = get_omega_lambda(Omega0_m, 0)
+    growth_0 = grow(omega_z0, omega_lambda0, z)
+
+
     ###ADD AMPLITUDE###
-    delta_h = amplitude(Omega0_m, cosmo.n_s)
-
+    amplitude = (k/cosmo.h)**cosmo.n_s
     ###ADD FACTOR###
-    factor = 2 * np.pi**2 / (k)**3 * (C * k / H0)**(3 + n)
-
-    Pk = div(
-        mul(mul(mul(power(delta_h, 2), power(T, 2)), power(growth_z, 2)),
-            factor), h**3)
+    Pk =  mul(mul( power(T, 2), div(power(growth_z, 2), power(growth_0,2))), amplitude)
 
     return dict(Pk=Pk)
 
