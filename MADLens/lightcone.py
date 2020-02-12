@@ -516,7 +516,7 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
 
     #Build power operator for initial conditions
     pklin_init      = dict(Omega0_m=cosmo.Omega0_m)
-    norm = normalize(8,params['sigma_8'],cosmo, transfer='NWEH', kmin=1e-5, kmax=1e1)
+    norm = normalize(8,cosmo, transfer='NWEH', kmin=1e-5, kmax=1e1)
     # gerate initial conditions
     cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
