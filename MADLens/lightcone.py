@@ -496,10 +496,9 @@ class WLSimulation(FastPMSimulation):
 
 def get_pk(pk):
     def apply_pk(k):
-        kk = k.normp(2,zeromode=1.)
-        kk = np.log(kk**0.5)
-        p_k = pk(kk)
-        return np.exp(p_k)
+        k = k.normp(2,zeromode=1.)
+        k = np.log(k**0.5)
+        return np.exp(pk(k))
     return apply_pk
 
 
@@ -519,7 +518,7 @@ def run_wl_sim(params, num, cosmo, pk, randseed = 187):
     BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
 
     np.random.seed(randseed)
-    randseeds = np.random.randint(0,1e6,100)
+    randseeds = np.random.randint(0,1e6,10000)
 
     # generate initial conditions
     #cosmo     = cosmo.clone(P_k_max=30)

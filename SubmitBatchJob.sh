@@ -1,11 +1,12 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -C haswell
-#SBATCH -q premium 
-#SBATCH -J small_run
+#SBATCH -q regular 
+#SBATCH -J small_run0
 #SBATCH --mail-user=vboehm@berkeley.edu
 #SBATCH --mail-type=ALL
-#SBATCH -t 01:00:00
+#SBATCH -t 17:00:00
+#SBATCH --account m3058 
 
 source /global/common/software/m3035/conda-activate.sh 3.7
 bcast-pip https://github.com/rainwoodman/vmad/archive/master.zip
@@ -21,6 +22,6 @@ export OMP_PROC_BIND=spread
 
 
 #run the sims with:
-srun -n 32 -c 2 --cpu_bind=cores python -u run_lightcone.py
+srun -n 32 -c 2 --cpu_bind=cores python -u run_lightcone.py 0
 
 

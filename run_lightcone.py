@@ -12,6 +12,7 @@ import os
 import json
 import subprocess
 import pickle
+import sys
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -51,8 +52,8 @@ def main(argv):
 
     """ -------------- setting paramaeters ------------------------"""
     params              = FLAGS.flag_values_dict() 
-    
-    _,fov_max,Omega_ms,sigma8s,_,Pk_interp = pickle.load(open(os.path.join('./run_specs',params['parameter_file']+'.pkl'),'rb'))
+    param_file_num      = int(sys.argv[1])   
+    _,fov_max,Omega_ms,sigma8s,_,Pk_interp = pickle.load(open(os.path.join('./run_specs',params['parameter_file']+'_%d.pkl'%param_file_num),'rb'))
 		
     for nn, (Omega_m,sigma_8) in enumerate(zip(Omega_ms,sigma8s)):
         params['Nmesh']     = [FLAGS.Nmesh]*3
@@ -63,9 +64,11 @@ def main(argv):
         params['Omega_m']   = Omega_m
         params['sigma_8']   = sigma_8
         params['label']     = 'small_run'
+        map_num             = param_file_num*100+nn
     
         cosmo = Planck15.match(Omega0_m=Omega_m)
-        cosmo = cosmo.match(sigma8=sigma_8)
+        # hoping that this is taken care of by choosing the right interpolated pk
+        #cosmo = cosmo.match(sigma8=sigma_8)
     
         if params['save3D'] or params['save3Dpower']:
             try:
@@ -96,18 +99,18 @@ def main(argv):
                 f.write(fjson)
                 f.close()
     
-        dirs                  = comm.bcast(dirs, root=0)
+        dirs    = comm.bcast(dirs, root=0)
     
         """---------------------------run actual simulations-----------------------------"""
         sims_start = time.time()
             
         for ii in range(FLAGS.N_maps):
             print('progress in percent:', ii/params['N_maps']*100)
-            kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=nn, pk = Pk_interp[nn])
+            kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=map_num, pk = Pk_interp[nn])
     
             for jj,z_source in enumerate(params['zs_source']):
                 kmap    = kmaps[jj]
-                mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_cosmo%d'%(z_source*10,nn)+'.npy')
+                mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_cosmo%d'%(z_source*10,map_num)+'.npy')
                 save_2Dmap(kmap,mapfile)
                 print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))
                 #bink,binpow,N = get_2Dpower(kmap)
