@@ -494,6 +494,13 @@ class WLSimulation(FastPMSimulation):
 
         return kmaps
 
+def get_pk(pk):
+    def apply_pk(k):
+        kk = k.normp(2,zeromode=1.)
+        kk = np.log(kk**0.5)
+        p_k = pk(kk)
+        return np.exp(p_k)
+    return apply_pk
 
 
 def run_wl_sim(params, num, cosmo, pk, randseed = 187):
@@ -517,7 +524,8 @@ def run_wl_sim(params, num, cosmo, pk, randseed = 187):
     # generate initial conditions
     #cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
-    rho       = rho.apply(lambda k, v:(pk(k.normp(2,zeromode=1) ** 0.5) / pm.BoxSize.prod()) ** 0.5 * v)
+    pk        = get_pk(pk)
+    rho       = rho.apply(lambda k, v:(pk(k) / pm.BoxSize.prod()) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
 
