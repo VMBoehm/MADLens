@@ -31,7 +31,7 @@ def crop_map(mymap,desired_fov,desired_pixel_num,params,cosmo,zs=1):
     return new_map
 
 
-fov_min,fov_max,Omega_ms,sigma8s, _, _ = pickle.load(open(os.path.join('./run_specs','S_8_small_run.pkl'),'rb'))
+fov_min,fov_max,Omega_ms,sigma8s, _, _ = pickle.load(open(os.path.join('./run_specs','S_8_small_run_0.pkl'),'rb'))
 param_path  = '/global/homes/v/vboehm/codes/MADLens/runs/'
 git_hash    = sys.argv[1]
 label       = sys.argv[2]
@@ -50,15 +50,13 @@ BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
 pm2D      = ParticleMesh(BoxSize=BoxSize2D, Nmesh=params['Nmesh2D'],resampler='cic')
 
 for ii in np.arange(100):
-    print(ii)
-    Omega_m   = Omega_ms[ii]
-    #sigma_8   = sigma8s[ii]
-    cosmo     = Planck15.match(Omega0_m=Omega_m)
-    #cosmo     = cosmo.match(sigma8=sigma_8)
     map_num   = ii+batch*100
+    Omega_m   = Omega_ms[map_num]
+    cosmo     = Planck15.match(Omega0_m=Omega_m)
     map_file  = os.path.join(map_dir,'map_decon_zsource%d_cosmo%d'%(params['zs_source'][0]*10,map_num)+'.npy')
     kappa_map = np.load(map_file).reshape(*pm2D.Nmesh)
     kappa_map = pm2D.create(type='real',value=kappa_map)
+    kappa_map = crop_map(kappa_map,desired_fov,1024,params,cosmo)
     map_file  = os.path.join(crop_dir,'map_decon_zsource%d_cosmo%d'%(params['zs_source'][0]*10,map_num)+'.npy')
     save_2Dmap(kappa_map,map_file)
 
