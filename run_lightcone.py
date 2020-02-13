@@ -54,7 +54,8 @@ def main(argv):
     params              = FLAGS.flag_values_dict() 
     param_file_num      = int(sys.argv[1])   
     _,fov_max,Omega_ms,sigma8s,_,Pk_interp = pickle.load(open(os.path.join('./run_specs',params['parameter_file']+'_%d.pkl'%param_file_num),'rb'))
-		
+    print(len(Pk_interp))
+    print(param_file_num)	
     for nn, (Omega_m,sigma_8) in enumerate(zip(Omega_ms,sigma8s)):
         params['Nmesh']     = [FLAGS.Nmesh]*3
         params['BoxSize']   = [FLAGS.boxsize]*3 
@@ -65,7 +66,7 @@ def main(argv):
         params['sigma_8']   = sigma_8
         params['label']     = 'small_run'
         map_num             = param_file_num*100+nn
-    
+        print(map_num)
         cosmo = Planck15.match(Omega0_m=Omega_m)
         # hoping that this is taken care of by choosing the right interpolated pk
         #cosmo = cosmo.match(sigma8=sigma_8)
