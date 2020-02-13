@@ -23,7 +23,7 @@ flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to 
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
 flags.DEFINE_float('boxsize',256,'size of the simulation box in Mpc/h')
 flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
-flags.DEFINE_integer('Nmesh2D',4096, 'resolution of lensing map')
+flags.DEFINE_integer('Nmesh2D',4096*2, 'resolution of lensing map')
 #flags.DEFINE_float('boxsize2D',6.37616,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
@@ -54,21 +54,18 @@ def main(argv):
     params              = FLAGS.flag_values_dict() 
     param_file_num      = int(sys.argv[1])   
     _,fov_max,Omega_ms,sigma8s,_,Pk_interp = pickle.load(open(os.path.join('./run_specs',params['parameter_file']+'_%d.pkl'%param_file_num),'rb'))
-    print(len(Pk_interp))
-    print(param_file_num)	
-    for nn, (Omega_m,sigma_8) in enumerate(zip(Omega_ms,sigma8s)):
+    for nn in range(100):
+        map_num             = param_file_num*100+nn
         params['Nmesh']     = [FLAGS.Nmesh]*3
         params['BoxSize']   = [FLAGS.boxsize]*3 
         params['Nmesh2D']   = [FLAGS.Nmesh2D]*2 
         params['BoxSize2D'] = [fov_max]*2 
         params['zs_source'] = [float(zs) for zs in FLAGS.zs_source]
-        params['Omega_m']   = Omega_m
-        params['sigma_8']   = sigma_8
+        params['Omega_m']   = Omega_ms[map_num]
+        params['sigma_8']   = sigma8s[map_num]
         params['label']     = 'small_run'
-        map_num             = param_file_num*100+nn
-        print(map_num)
-        cosmo = Planck15.match(Omega0_m=Omega_m)
-        # hoping that this is taken care of by choosing the right interpolated pk
+        cosmo = Planck15.match(Omega0_m=params['Omega_m'])
+        #this is taken care of by choosing the right interpolated pk
         #cosmo = cosmo.match(sigma8=sigma_8)
     
         if params['save3D'] or params['save3Dpower']:
@@ -114,28 +111,12 @@ def main(argv):
                 mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_cosmo%d'%(z_source*10,map_num)+'.npy')
                 save_2Dmap(kmap,mapfile)
                 print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))
-                #bink,binpow,N = get_2Dpower(kmap)
-                #len_k = len(bink)
-                #if rank ==0:
-                #    if ii==0 and jj==0:
-                #        binpows        = np.zeros((len(params['zs_source']),params['N_maps'],len_k))
-                #    binpows[jj,ii] = binpow
     
         end = time.time()
     
         print('time taken per sim in sec %d'%((end-sims_start)/(params['N_maps']*len(params['zs_source']))))
         print('time takes before sims in sec %d'%(sims_start-start))
     
-        """ ------------------------- save average cls ----------------------------------"""
-        #if rank==0:
-        #    for jj,z_source in enumerate(params['zs_source']):
-        #        binpow       = np.mean(binpows[jj], axis=0)
-        #        binpow_std   = np.std(binpows[jj], axis=0)
-   # 
-   #             clfile       = os.path.join(dirs['cls'],'mean_cl_zsource%d_averaged_over_%dmaps.npy'%(z_source*10,params['N_maps']))
-   # 
-   #             np.save(clfile,[bink,binpow,binpow_std,N])
-   #             print('cls dumped to %s'%clfile)
 
 if __name__ == '__main__':
   app.run(main)
