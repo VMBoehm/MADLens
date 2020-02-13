@@ -52,9 +52,9 @@ pm2D      = ParticleMesh(BoxSize=BoxSize2D, Nmesh=params['Nmesh2D'],resampler='c
 for ii in np.arange(100):
     print(ii)
     Omega_m   = Omega_ms[ii]
-    sigma_8   = sigma8s[ii]
+    #sigma_8   = sigma8s[ii]
     cosmo     = Planck15.match(Omega0_m=Omega_m)
-    cosmo     = cosmo.match(sigma8=sigma_8)
+    #cosmo     = cosmo.match(sigma8=sigma_8)
     map_num   = ii+batch*100
     map_file  = os.path.join(map_dir,'map_decon_zsource%d_cosmo%d'%(params['zs_source'][0]*10,map_num)+'.npy')
     kappa_map = np.load(map_file).reshape(*pm2D.Nmesh)
