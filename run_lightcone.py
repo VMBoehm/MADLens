@@ -26,6 +26,8 @@ flags.DEFINE_float('boxsize2D',6.37616,'field of view in degrees (default is opt
 flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
+flags.DEFINE_float('Omega0_m_sigma',.0073 , '1 sigma of matter density')
+flags.DEFINE_integer('undershoot', 4,'number of omega_m stds for maximal comoving distance')
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')

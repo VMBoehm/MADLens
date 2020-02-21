@@ -3,6 +3,7 @@ from vmad.core import stdlib
 from vmad.lib import fastpm
 from vmad.lib import linalg
 from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
+from nbodykit.cosmology import Planck15
 import numpy
 from vmad.lib.linalg import sum, mul
 import scipy
@@ -16,7 +17,7 @@ import pickle
 import os
 import errno
 import resource
-
+from scipy.integrate import quad
 
 @operator
 class list_elem:
@@ -64,6 +65,15 @@ def get_interp_factors(x_,x,y):
     return factors
 
 
+def deriv_integral(x, omega0_m):
+    """
+    Derivative of the comoving distance with respect to matter density
+    """
+    #Create the denominator of the integral
+    E = (omega0_m * ((1+x)**3 -1)+ 1)**(-3/2)
+    diriv_factor = (-1/2) * ((1+x)**3-1)
+
+    return E*diriv_factor
 
 #TODO: add support for derivative here
 @operator
@@ -84,6 +94,7 @@ class DriftFactor:
     def jvp(node,af_,ai,ac,pt):
         pass#factors = get_interpolation_factors(af_,pt.)
 
+#Max's Operator for matter
 @operator
 class chi_z:
     """
@@ -104,6 +115,24 @@ class chi_z:
         return dict(chi_ = numpy.multiply(res,z_))
 
 
+    ain  = {'omega0_m': 'float'}
+    aout = {'chi':'float'}
+
+    def apl(node, omega0_m, z, cosmo):
+        #Calculate the integral from 0->z
+        E         = lambda x: (omega0_m  * ((1+x)**3 -1)+1)**(-1/2)
+        Dc , _    = quad(E, 0, z)
+        return dict(chi = Dc*cosmo.C/cosmo.H0)
+    def vjp(node, _chi, omega0_m, z, cosmo):
+        #Return the derivative of the integral WR2 omega0_m and mult by _chi
+        _omega0_m  =  _chi  *  quad(deriv_integral, 0, z, args=(omega0_m))[0]
+        #Multiply by hubble distance and return
+        return dict(_omega0_m = _omega0_m*cosmo.C/cosmo.H0)
+    def jvp(node, omega0_m_, omega0_m, z, cosmo):
+        #Find derivative with respevct to omega_0 and mult by omega0_m_
+        omega0_m_   *= omega0_m_ * quad(deriv_integral, 0, z, args=(omega0_m))[0]
+        #Multiply by hubble distance
+        return dict(chi_ = omega0_m_*cosmo.C/cosmo.H0)
 @operator
 class z_chi:
     """
@@ -220,7 +249,7 @@ class ImageGenerator:
 
 
 class WLSimulation(FastPMSimulation):
-    def __init__(self, stages, cosmology, pm, params, boxsize2D):
+    def __init__(self, stages,  cosmology, pm, params, boxsize2D):
         """
         stages:    1d array of floats. scale factors at which to evaluate fastpm simulation (fastpm steps)
         cosmology: nbodykit cosmology object
@@ -230,7 +259,7 @@ class WLSimulation(FastPMSimulation):
         """
 
         q = pm.generate_uniform_particle_grid(shift=0.)
-        FastPMSimulation.__init__(self, stages, cosmology, pm, params['B'], q)
+        FastPMSimulation.__init__(self, stages, cosmology.Omega0_m, cosmology, pm, params['B'], q)
 
         # source redshifts and distances
         self.zs      = params['zs_source']
@@ -318,14 +347,16 @@ class WLSimulation(FastPMSimulation):
 
 
     # can we remove p here?
-    @autooperator('dx, p, kmaps->kmaps')
-    def interp(self, dx, p, kmaps, dx_PGD, ax, ap, ai, af):
+    @autooperator('dx, p, kmaps, omega0_m ->kmaps')
+    def interp(self, dx, p, kmaps, omega0_m, dx_PGD, ax, ap, ai, af):
 
-        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
-
-        for M in self.imgen.generate(di, df):
+        di = chi_z(1. /ai - 1., omega0_m, self.cosmo)
+        df = chi_z(1. /af - 1., omega0_m, self.cosmo)
+        df_value = self.cosmo.comoving_distance(1./af-1. )
+        di_value = self.cosmo.comoving_distance(1./ai - 1.)
+        for M in self.imgen.generate(di_value, df_value):
             # if lower end of box further away than source -> do nothing
-            if df>self.max_ds:
+            if df_value>self.max_ds:
                 continue
             else:
                 M, boxshift = M
@@ -345,7 +376,8 @@ class WLSimulation(FastPMSimulation):
 
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+
+                    mask     = stdlib.eval([d,di,df], lambda args, ds=ds, d_approx=d_approx: 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0]<=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor
                     kmap     = list_elem(kmaps, ii)
                     kmaps    = list_put(kmaps,kmap_+kmap,ii)
@@ -353,8 +385,8 @@ class WLSimulation(FastPMSimulation):
         return kmaps
 
 
-    @autooperator('rhok->kmaps')
-    def run_interpolated(self, rhok):
+    @autooperator('rhok, omega0_m->kmaps')
+    def run_interpolated(self, rhok, omega0_m):
 
         def getrss():
             usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -398,7 +430,7 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p, kmaps, dx_PGD, ac, ac, ai, af)
+            kmaps = self.interp(dx, p, kmaps,omega0_m, dx_PGD, ac, ac, ai, af)
 
             # drift
             ddx = p * self.DriftFactor(ac, ac, af)
@@ -437,7 +469,9 @@ class WLSimulation(FastPMSimulation):
         ii = 0
         for ai, af in zip(stages[:-1], stages[1:]):
 
-            di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+            di_value, df_value = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+            di = chi_z(1. /ai - 1., omega0_m, self.cosmo)
+            df = chi_z(1. /af - 1., omega0_m, self.cosmo)
 
 
             # central scale factor
@@ -461,7 +495,7 @@ class WLSimulation(FastPMSimulation):
 
             for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
-                if df>self.max_ds:
+                if df_value>self.max_ds:
                     continue
                 else:
                     M, boxshift = M
@@ -472,7 +506,7 @@ class WLSimulation(FastPMSimulation):
 
                     for ii, ds in enumerate(self.ds):
                         w     = self.wlen(d,ds)
-                        mask  = stdlib.eval(d, lambda d, di=di, df=df, ds=self.ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                        mask  = stdlib.eval([d,di,df], lambda args, ds=ds, d_approx=d_approx: 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0]<=ds))
                         kmap_ = self.makemap(xy, w*mask)*self.factor
                         kmap  = list_elem(kmaps,ii)
                         kmaps = list_put(kmaps,kmap_+kmap,ii)
@@ -525,7 +559,7 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     rho.csetitem([0, 0, 0], 0)
 
     # weak lensing simulation object
-    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
+    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True),cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
 
     #build
     if params['interpolate']:
@@ -534,9 +568,9 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         model     = wlsim.run.build()
 
     # compute
-    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
 
-    # compute derivative if requested
+    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho, omega0_m=cosmo.Omega0_m))
+
     kmaps_deriv = None
     if params['mode']=='backprop':
         kmap_deriv = model.compute_with_vjp(init=dict(rhok=rho.r2c()), v=dict(_kmap=kmap))
