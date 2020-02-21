@@ -4,7 +4,7 @@ from vmad.core.stdlib.operators import mul, div, add, sub
 from vmad.core.stdlib.operators import pow as power
 from vmad.lib.unary import log, sinc, exp
 from vmad.lib.linalg import reshape
-
+from nbodykit import cosmology
 def normalize(r,cosmo, transfer='EH', kmin=1e-5, kmax=1e1):
     """
     The mass fluctuation within a sphere of radius ``r``, in
@@ -72,6 +72,8 @@ def get_omega_lambda(omega0_m, z):
 @autooperator('Omega0_m->Pk')
 def get_Pk_NWEH(Omega0_m, cosmo, z, k):
 
+    fiducial_power = cosmology.LinearPower(cosmo, z).__call__(k)
+
     Obh2 = cosmo.Omega0_b * cosmo.h**2
     Omh2 = mul(Omega0_m, power(cosmo.h, 2))
     f_baryon = div(cosmo.Omega0_b, Omega0_m)
@@ -92,7 +94,7 @@ def get_Pk_NWEH(Omega0_m, cosmo, z, k):
     q_eff = div(mul(q,Omh2), gamma_eff)  # h^2 Mpc^-2
 
     L0 = log(add(2*np.e, mul(1.8, q_eff)))
-    C0 = 14.2 + div(731.0, add(1, mul(62.5, q_eff)))
+    C0 = add(14.2, div(731.0, add(1, mul(62.5, q_eff))))
 
     T = div(L0, add(L0, mul(C0, power(q_eff,2))))
 
@@ -104,9 +106,9 @@ def get_Pk_NWEH(Omega0_m, cosmo, z, k):
     omega_lambdas = get_omega_lambda(Omega0_m, 0)
     growth_0 = grow(omega_zs, omega_lambdas, 0)
 
-    factor = (k/cosmo.h)**cosmo.n_s
+    factor = power(div(k,cosmo.h),cosmo.n_s)
 
-    Pk = mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor)
+    Pk = div(mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor), fiducial_power)
 
     return dict(Pk=Pk)
 
@@ -117,14 +119,15 @@ def f(a,b,q):
 @autooperator('Omega0_m->Pk')
 def get_Pk_EH(Omega0_m, cosmo, z, k):
 
-    Obh2 = cosmo.Omega0_b * cosmo.h ** 2
+    fiducial_power = cosmology.LinearPower(cosmo, z).__call__(k)
+    Obh2 = mul(cosmo.Omega0_b, power(cosmo.h, 2))
     Omh2 = mul(Omega0_m, power(cosmo.h, 2))
     f_baryon = div(cosmo.Omega0_b, Omega0_m)
-    theta_cmb = cosmo.Tcmb0 / 2.7
+    theta_cmb = div(cosmo.Tcmb0 , 2.7)
 
     # z and wavenumber of equality
-    z_eq = mul(mul(2.5e4, Omh2),theta_cmb ** (-4)) # this is 1 + z
-    k_eq = mul(mul(0.0746, Omh2),theta_cmb ** (-2)) # units of 1/Mpc
+    z_eq = mul(mul(2.5e4, Omh2),power(theta_cmb, -4)) # this is 1 + z
+    k_eq = mul(mul(0.0746, Omh2),power(theta_cmb ,-2)) # units of 1/Mpc
 
     # sound horizon and k_silk
     z_drag_b1 = mul(mul(0.313, power(Omh2, -0.419)), add(1, mul(0.607,power(Omh2, 0.674))))
@@ -133,13 +136,13 @@ def get_Pk_EH(Omega0_m, cosmo, z, k):
 
 
 
-    r_drag = div(31.5 * Obh2 * theta_cmb ** -4 * 1000., add(1,z_drag))
-    r_eq   = div(31.5 * Obh2 * theta_cmb ** -4 * 1000., z_eq)
+    r_drag = div(mul(mul(mul(31.5, Obh2), power(theta_cmb, -4)), 1000.), add(1,z_drag))
+    r_eq   = div(mul(mul(mul(31.5, Obh2), power(theta_cmb, -4)), 1000.), add(1,z_eq))
 
     sound_horizon = mul(mul(div(2., mul(3.,k_eq)),power(div(6., r_eq), .5)), \
                     log(div(add(power(add(1,r_drag), .5), power(add(r_drag,r_eq), .5)), add(1, power(r_eq, .5)))))
 
-    k_silk = mul(mul(1.6 * Obh2 ** 0.52, power(Omh2,0.73)),add(1, power(mul(10.4,Omh2), -0.95)))
+    k_silk = mul(mul(mul(1.6,power( Obh2, 0.52)), power(Omh2,0.73)),add(1, power(mul(10.4,Omh2), -0.95)))
 
     # alpha_c
     alpha_c_a1 = mul(power(mul(46.9,Omh2),0.670 ), add(1, power(mul(32.1,Omh2), -0.532)))
@@ -210,5 +213,5 @@ def get_Pk_EH(Omega0_m, cosmo, z, k):
 
     factor = (k/cosmo.h)**cosmo.n_s
 
-    Pk = mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor)
+    Pk =div(mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor), fiducial_power)
     return dict(Pk=Pk)
