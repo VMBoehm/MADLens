@@ -551,13 +551,13 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         kmaps, tape = model.compute(vout='kmaps', init=dict(rhok=rho),return_tape=True)
     else:
         kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
-    print(kmaps)    
+    
     # compute derivative if requested 
     kmap_vjp,kmap_jvp = [None, None]
     if params['mode']=='backprop': 
         vjp      = tape.get_vjp()
         kmap_vjp = vjp.compute(init=dict(_kmaps=kmaps), vout='_rhok')
-#        jvp      = tape.get_jvp()
-#        kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
+        jvp      = tape.get_jvp()
+        kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
 
     return kmaps, [kmap_vjp,kmap_jvp], pm
