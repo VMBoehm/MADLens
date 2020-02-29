@@ -30,6 +30,7 @@ class list_elem:
         return dict(elem=elem)
 
     def vjp(node, _elem, x,i):
+        print(numpy.shape(_elem))
         # convert list into stack of arrays
         x        = np.stack(x,axis=0)
         deriv    = numpy.zeros(numpy.shape(x))
@@ -42,21 +43,57 @@ class list_elem:
         elem_ = x_[i]
         return dict(elem_=elem_)
 
-@operator 
+
+
+@operator
 class list_put:
     """ 
-    add an item to a list entry
+    put an item into a list
     """
-    ain = {'elem': '*'}
-    aout = {'y': '*'}
+    ain = {'x': 'ndarray', 'elem': 'ndarray'}
+    aout = {'y': 'ndarray'}
 
-    def apl(node, elem, x, i):
-        x[i] = x[i]+elem 
-        return dict(y=x)
+    def apl(node, x, elem, i):
+        y    = x
+        x[i] = elem
+        return dict(y=y)
 
     def vjp(node, _y, x, i):
-        _elem    = _y[i]
-        return dict(_elem=_elem)          
+        deriv    = [yy for yy in _y]
+        deriv[i] = np.zeros(numpy.shape(_y[0]))
+        _x       = deriv
+        _elem    = [np.zeros(numpy.shape(_y[0])) for yy in _y]
+        _elem[i] = _y[i]
+        return dict(_x=_x, _elem=_elem)
+
+    def jvp(node, x_, elem_, x, i):
+        x_       = numpy.vstack(x_)
+        deriv    = numpy.ones(len(x))
+        deriv[i] = 0
+        deriv_   = numpy.zeros(len(x))
+        deriv_[i]= 1
+        y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('j,i->ji',deriv_,elem_)
+        return dict(y_=y_)
+
+
+
+#@operator 
+#class list_put:
+#    """ 
+#    add an item to a list entry
+#    """
+#    ain = {'elem': '*'}
+#    aout = {'y': '*'}
+#
+#    def apl(node, elem, x, i):
+#        x[i] = x[i]+elem 
+#        return dict(y=x)
+#
+#    def vjp(node, _y, x, i):
+#        _elem    = _y[i]
+#        return dict(_elem=_elem)          
+
+
 
 
 def get_interp_factors(x_,x,y):
@@ -484,7 +521,7 @@ class WLSimulation(FastPMSimulation):
                         kmap_    = self.makemap(xy, w*mask)*self.factor   
                         kmap     = list_elem(kmaps,ii)
                         kmap     = linalg.add(kmap_,kmap)
-                        kmaps    = list_put(kmap,kmaps,ii)
+                        kmaps    = list_put(kmaps,kmap,ii)
             
             if self.params['save3D'] or self.params['save3Dpower']:
                 zf       = 1./af-1.
