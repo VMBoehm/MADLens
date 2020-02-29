@@ -29,7 +29,7 @@ flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upp
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
-flags.DEFINE_spaceseplist('zs_source',['1.'],'source redshifts')
+flags.DEFINE_spaceseplist('zs_source',['1.','1.5'],'source redshifts')
 flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')

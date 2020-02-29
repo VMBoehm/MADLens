@@ -23,47 +23,40 @@ class list_elem:
     take an item from a list
     """
     ain = {'x' : '*',}
-    aout = {'y' : '*'}
+    aout = {'elem' : '*'}
 
     def apl(node, x, i):
-        y = x[i]
-        return dict(y=y)
+        elem = x[i]
+        return dict(elem=elem)
 
-    def vjp(node, _y, x,i):
-        _x = list(numpy.zeros(len(x)))
-        _x[i] = 1.
+    def vjp(node, _elem, x,i):
+        # convert list into stack of arrays
+        x        = np.stack(x,axis=0)
+        deriv    = numpy.zeros(numpy.shape(x))
+        deriv[i] = numpy.ones(numpy.shape(x)[1:])
+        _x       = deriv*_elem
+        _x       = [xx for xx in _x]
         return dict(_x=_x)
         
     def jvp(node,x_, x, i):
-        return dict(y_=x_[i])
+        elem_ = x_[i]
+        return dict(elem_=elem_)
 
 @operator 
 class list_put:
     """ 
-    put an item into a list
+    add an item to a list entry
     """
-    ain = {'x': '*'}
+    ain = {'elem': '*'}
     aout = {'y': '*'}
 
-    def apl(node, x, item, i):
-        x[i] = item
-        y    = x
-        return dict(y=y)
+    def apl(node, elem, x, i):
+        x[i] = x[i]+elem 
+        return dict(y=x)
 
     def vjp(node, _y, x, i):
-        deriv    = list(numpy.ones(len(x)))
-        deriv[i] = 0.
-        #_x       = deriv*_y
-        _x = [d*yy for d, yy in zip(deriv,_y)]
-        return dict(_x=_x)          
-
-    def jvp(node, x_, x, i):
-        deriv    = list(numpy.ones(len(x)))
-        deriv[i] = 0
-        #y_       = deriv*x_
-        y_ = [xx*d for d, xx in zip(deriv,x_)]
-        return dict(y_=y_)
-
+        _elem    = _y[i]
+        return dict(_elem=_elem)          
 
 
 def get_interp_factors(x_,x,y):
@@ -384,7 +377,7 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers = []
-        kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
+        kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
         
         f, potk= self.gravity(dx)
 
@@ -445,8 +438,8 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers =[]
-        #kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
-        kmaps  = self.mappm.create('real', value=0.)
+        kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
+      
         f, potk= self.gravity(dx)
 
         ii = 0 
@@ -485,14 +478,13 @@ class WLSimulation(FastPMSimulation):
             
                     xy       = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
 
-                    ds       = self.ds[0]
-                    #for ii, ds in enumerate(self.ds):
-                    w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=self.ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                    kmaps_   = self.makemap(xy, w*mask)*self.factor
-                    #    kmap  = list_elem(kmaps,ii)
-                    #    kmaps = list_put(kmaps,kmap_+kmap,ii)
-                kmaps=linalg.add(kmaps,kmaps_)
+                    for ii, ds in enumerate(self.ds):
+                        w        = self.wlen(d,ds)
+                        mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                        kmap_    = self.makemap(xy, w*mask)*self.factor   
+                        kmap     = list_elem(kmaps,ii)
+                        kmap     = linalg.add(kmap_,kmap)
+                        kmaps    = list_put(kmap,kmaps,ii)
             
             if self.params['save3D'] or self.params['save3Dpower']:
                 zf       = 1./af-1.
@@ -551,13 +543,13 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         kmaps, tape = model.compute(vout='kmaps', init=dict(rhok=rho),return_tape=True)
     else:
         kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
-    
+    print(len(kmaps))   
     # compute derivative if requested 
     kmap_vjp,kmap_jvp = [None, None]
     if params['mode']=='backprop': 
         vjp      = tape.get_vjp()
         kmap_vjp = vjp.compute(init=dict(_kmaps=kmaps), vout='_rhok')
-        jvp      = tape.get_jvp()
-        kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
+        #jvp      = tape.get_jvp()
+        #kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
 
     return kmaps, [kmap_vjp,kmap_jvp], pm
