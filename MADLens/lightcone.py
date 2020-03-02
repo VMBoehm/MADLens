@@ -17,7 +17,7 @@ import errno
 import resource
 
 
-class my_list(list):
+class mod_list(list):
     def __add__(self,other):
         assert(len(other)==len(self))
         return [self[ii]+other[ii] for ii in range(len(self))]
@@ -66,7 +66,7 @@ class list_put:
 
     def vjp(node, _y, len_x, i):
         _elem    = _y[i]
-        _x       = my_list([0 for ii in range(len_x)])
+        _x       = mod_list([0 for ii in range(len_x)])
         return dict(_x=_x, _elem=_elem)
 
     def jvp(node, x_, elem_, x, i):
@@ -77,26 +77,6 @@ class list_put:
         deriv_[i]= 1
         y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('j,i->ji',deriv_,elem_)
         return dict(y_=y_)
-
-
-
-#@operator 
-#class list_put:
-#    """ 
-#    add an item to a list entry
-#    """
-#    ain = {'elem': '*'}
-#    aout = {'y': '*'}
-#
-#    def apl(node, elem, x, i):
-#        x[i] = x[i]+elem 
-#        return dict(y=x)
-#
-#    def vjp(node, _y, x, i):
-#        _elem    = _y[i]
-#        return dict(_elem=_elem)          
-
-
 
 
 def get_interp_factors(x_,x,y):
@@ -501,7 +481,7 @@ class WLSimulation(FastPMSimulation):
 
             if self.params['PGD']:
                 alpha    = self.alpha0*af**self.mu
-                dx_      = PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
+                dx_      = PGD.PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
             else:
                 dx_      = 0.
 
