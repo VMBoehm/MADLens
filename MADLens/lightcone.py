@@ -17,6 +17,12 @@ import errno
 import resource
 
 
+class my_list(list):
+    def __add__(self,other):
+        assert(len(other)==len(self))
+        return [self[ii]+other[ii] for ii in range(len(self))]
+
+
 @operator
 class list_elem:
     """
@@ -27,16 +33,16 @@ class list_elem:
 
     def apl(node, x, i):
         elem = x[i]
-        return dict(elem=elem)
+        print('apl:', numpy.shape(elem))
+        return dict(elem=elem, x_shape=[numpy.shape(xx) for xx in x])
 
-    def vjp(node, _elem, x,i):
-        print(numpy.shape(_elem))
-        # convert list into stack of arrays
-        x        = np.stack(x,axis=0)
-        deriv    = numpy.zeros(numpy.shape(x))
-        deriv[i] = numpy.ones(numpy.shape(x)[1:])
-        _x       = deriv*_elem
-        _x       = [xx for xx in _x]
+    def vjp(node, _elem, x_shape, i):
+        print('vjp:', numpy.shape(_elem))
+        _x       = []
+        for ii in range(len(x_shape)):
+            _x.append(numpy.zeros(x_shape[ii],dtype='f8'))
+        _x[i][:] = _elem
+
         return dict(_x=_x)
         
     def jvp(node,x_, x, i):
@@ -56,14 +62,11 @@ class list_put:
     def apl(node, x, elem, i):
         y    = x
         x[i] = elem
-        return dict(y=y)
+        return dict(y=y, len_x = len(x))
 
-    def vjp(node, _y, x, i):
-        deriv    = [yy for yy in _y]
-        deriv[i] = np.zeros(numpy.shape(_y[0]))
-        _x       = deriv
-        _elem    = [np.zeros(numpy.shape(_y[0])) for yy in _y]
-        _elem[i] = _y[i]
+    def vjp(node, _y, len_x, i):
+        _elem    = _y[i]
+        _x       = my_list([0 for ii in range(len_x)])
         return dict(_x=_x, _elem=_elem)
 
     def jvp(node, x_, elem_, x, i):
@@ -476,7 +479,7 @@ class WLSimulation(FastPMSimulation):
 
         powers =[]
         kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
-      
+        
         f, potk= self.gravity(dx)
 
         ii = 0 
@@ -580,7 +583,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         kmaps, tape = model.compute(vout='kmaps', init=dict(rhok=rho),return_tape=True)
     else:
         kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
-    print(len(kmaps))   
     # compute derivative if requested 
     kmap_vjp,kmap_jvp = [None, None]
     if params['mode']=='backprop': 
