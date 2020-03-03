@@ -17,6 +17,33 @@ import errno
 import resource
 
 
+
+def BinarySearch_Left(mylist, items):
+    print(mylist, items)
+    "finds where to insert elements into a sorted array, this is the equivalent of numpy.searchsorted"
+    results =[]
+    for item in items:
+        if item>=max(mylist):
+            results.append(len(mylist))
+        elif item<=min(mylist):
+            results.append(0)
+        else:
+            results.append(binarysearch_left(mylist,item, low=0, high=len(mylist)-1))
+    return np.asarray(results, dtype=int)
+
+def binarysearch_left(A, value, low, high):
+    "left binary search"
+    if (high < low):
+        return low
+    mid = (low + high) //2
+    if (A[mid] >= value):
+        return binarysearch_left(A, value, low, mid-1)
+    else:
+        return binarysearch_left(A, value, mid+1, high)
+
+
+
+
 class mod_list(list):
     def __add__(self,other):
         assert(len(other)==len(self))
@@ -93,24 +120,12 @@ def get_interp_factors(x_,x,y):
 
     
 
-#TODO: add support for derivative here
-@operator
-class DriftFactor:
-    """
-    Drift Factor for evolution around central redshift 
-    """
-    ain = {'af':'ndarray'}
-    aout= {'drift':'ndarray'}
+#TODO: if pt has derivative, make this an autooperator
+#@autooperator('af->drift')
+#def DriftFactor(self,af,ai,ac,pt):
+#    drift = 1 / (ac ** 3 * pt.E(ac)) * (pt.Gp(af) - pt.Gp(ai)) / pt.gp(ac)
+#    return drift
 
-    def apl(node,af,ai,ac,pt):
-        result = 1 / (ac ** 3 * pt.E(ac)) * (pt.Gp(af) - pt.Gp(ai)) / pt.gp(ac)
-        return dict(drift=result)
-
-    def vjp(node,_drift,ai,ac,pt):
-        pass
-
-    def jvp(node,af_,ai,ac,pt):
-        pass#factors = get_interpolation_factors(af_,pt.)
 
 @operator
 class chi_z:
@@ -343,7 +358,25 @@ class WLSimulation(FastPMSimulation):
         map          = fastpm.c2r(c)
         
         return map
-            
+
+    @autooperator('af->drift')
+    def mod_DriftFactor(self,af,ai,ac,pt):
+        drift = 1 / (ac ** 3 * pt.E(ac)) * (self.mod_Gp(af,0) - pt.Gp(ai)) / pt.gp(ac)
+        return drift
+    
+    @autooperator('a->D1')
+    def mod_Gp(self, a, order):
+        lna = linalg.log(a)
+        y   = self.pt._D1[:,order]
+        x   = self.pt.lna
+        indices = stdlib.eval(lna, lambda lna, x = x: BinarySearch_Left(x, lna))
+        print(indices)
+        y = np.append(y, y[-1])
+        y = np.append(y, y[0])
+        x = np.append(x, x[-1]+1)
+        factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
+        D1      = y[indices-1]+factors*(lna-x[indices-1])
+        return D1
 
     # can we remove p here?
     @autooperator('dx, p, kmaps->kmaps')
@@ -363,7 +396,7 @@ class WLSimulation(FastPMSimulation):
                 a_approx = 1. / (z_chi(d_approx, self.cosmo, self.z_chi_int) + 1.)
 
                 # move particles to a_approx, then add PGD correction
-                dx1      = dx + linalg.einsum("ij,i->ij", [p,DriftFactor(a_approx, ax, ap, self.pt)]) + dx_PGD
+                dx1      = dx + linalg.einsum("ij,i->ij", [p,self.mod_DriftFactor(a_approx, ax, ap, self.pt)]) + dx_PGD
 
                 # rotate their positions
                 xy, d    = self.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
@@ -374,10 +407,11 @@ class WLSimulation(FastPMSimulation):
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    kmap     = list_elem(kmaps,ii)
                     kmap_    = self.makemap(xy, w*mask)*self.factor
-                    kmap     = list_elem(kmaps, ii)
-                    kmaps    = list_put(kmaps,kmap_+kmap,ii)
-
+                    kmap     = linalg.add(kmap_,kmap)
+                    kmaps    = list_put(kmaps,kmap,ii)
+         
         return kmaps
 
 
