@@ -60,11 +60,9 @@ class list_elem:
 
     def apl(node, x, i):
         elem = x[i]
-        print('apl:', numpy.shape(elem))
         return dict(elem=elem, x_shape=[numpy.shape(xx) for xx in x])
 
     def vjp(node, _elem, x_shape, i):
-        print('vjp:', numpy.shape(_elem))
         _x       = []
         for ii in range(len(x_shape)):
             _x.append(numpy.zeros(x_shape[ii],dtype='f8'))
