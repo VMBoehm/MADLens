@@ -42,8 +42,6 @@ def binarysearch_left(A, value, low, high):
         return binarysearch_left(A, value, mid+1, high)
 
 
-
-
 class mod_list(list):
     def __add__(self,other):
         assert(len(other)==len(self))
@@ -106,17 +104,17 @@ class list_put:
         return dict(y_=y_)
 
 
-def get_interp_factors(x_,x,y):
-    indices = np.searchsorted(x, x_)
-    
-    #ensure periodic boundary conditions
-    y = np.append(y, y[-1])
-    y = np.append(y, y[0])
+#def get_interp_factors(x_,x,y):
+#    indices = np.searchsorted(x, x_)
+#    
+#    #ensure periodic boundary conditions
+#    y = np.append(y, y[-1#])
+#    y = np.append(y, y[0])
     
     #ensure that x[indices] is defined for all indices (value is unimportant)
-    x = np.append(x, x[-1]+1)
-    factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
-    return factors
+#    x = np.append(x, x[-1]+1)
+#    factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
+#    return factors
 
     
 
@@ -370,7 +368,7 @@ class WLSimulation(FastPMSimulation):
         y   = self.pt._D1[:,order]
         x   = self.pt.lna
         indices = stdlib.eval(lna, lambda lna, x = x: BinarySearch_Left(x, lna))
-        print(indices)
+        
         y = np.append(y, y[-1])
         y = np.append(y, y[0])
         x = np.append(x, x[-1]+1)
