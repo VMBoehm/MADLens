@@ -72,7 +72,6 @@ def get_omega_lambda(omega0_m, z):
 @autooperator('Omega0_m->Pk')
 def get_Pk_NWEH(Omega0_m, cosmo, z, k):
 
-    fiducial_power = cosmology.LinearPower(cosmo, z).__call__(k)
 
     Obh2 = cosmo.Omega0_b * cosmo.h**2
     Omh2 = mul(Omega0_m, power(cosmo.h, 2))
@@ -108,7 +107,7 @@ def get_Pk_NWEH(Omega0_m, cosmo, z, k):
 
     factor = power(div(k,cosmo.h),cosmo.n_s)
 
-    Pk = div(mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor), fiducial_power)
+    Pk = mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor)
 
     return dict(Pk=Pk)
 
@@ -119,7 +118,6 @@ def f(a,b,q):
 @autooperator('Omega0_m->Pk')
 def get_Pk_EH(Omega0_m, cosmo, z, k):
 
-    fiducial_power = cosmology.LinearPower(cosmo, z).__call__(k)
     Obh2 = mul(cosmo.Omega0_b, power(cosmo.h, 2))
     Omh2 = mul(Omega0_m, power(cosmo.h, 2))
     f_baryon = div(cosmo.Omega0_b, Omega0_m)
@@ -213,5 +211,5 @@ def get_Pk_EH(Omega0_m, cosmo, z, k):
 
     factor = (k/cosmo.h)**cosmo.n_s
 
-    Pk =div(mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor), fiducial_power)
+    Pk =mul(mul(power(T, 2), div(power(growth_z, 2),power(growth_0,2))),factor)
     return dict(Pk=Pk)

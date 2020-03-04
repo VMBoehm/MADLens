@@ -65,12 +65,12 @@ def get_interp_factors(x_,x,y):
     return factors
 
 
-def deriv_integral(x, omega0_m):
+def deriv_integral(x, Omega0_m):
     """
     Derivative of the comoving distance with respect to matter density
     """
     #Create the denominator of the integral
-    E = (omega0_m * ((1+x)**3 -1)+ 1)**(-3/2)
+    E = (Omega0_m * ((1+x)**3 -1)+ 1)**(-3/2)
     diriv_factor = (-1/2) * ((1+x)**3-1)
 
     return E*diriv_factor
@@ -115,24 +115,24 @@ class chi_z:
         return dict(chi_ = numpy.multiply(res,z_))
 
 
-    ain  = {'omega0_m': 'float'}
+    ain  = {'Omega0_m': 'float'}
     aout = {'chi':'float'}
 
-    def apl(node, omega0_m, z, cosmo):
+    def apl(node, Omega0_m, z, cosmo):
         #Calculate the integral from 0->z
-        E         = lambda x: (omega0_m  * ((1+x)**3 -1)+1)**(-1/2)
+        E         = lambda x: (Omega0_m  * ((1+x)**3 -1)+1)**(-1/2)
         Dc , _    = quad(E, 0, z)
         return dict(chi = Dc*cosmo.C/cosmo.H0)
-    def vjp(node, _chi, omega0_m, z, cosmo):
-        #Return the derivative of the integral WR2 omega0_m and mult by _chi
-        _omega0_m  =  _chi  *  quad(deriv_integral, 0, z, args=(omega0_m))[0]
+    def vjp(node, _chi, Omega0_m, z, cosmo):
+        #Return the derivative of the integral WR2 Omega0_m and mult by _chi
+        _Omega0_m  =  _chi  *  quad(deriv_integral, 0, z, args=(omega0_m))[0]
         #Multiply by hubble distance and return
-        return dict(_omega0_m = _omega0_m*cosmo.C/cosmo.H0)
-    def jvp(node, omega0_m_, omega0_m, z, cosmo):
-        #Find derivative with respevct to omega_0 and mult by omega0_m_
-        omega0_m_   *= omega0_m_ * quad(deriv_integral, 0, z, args=(omega0_m))[0]
+        return dict(_Omega0_m = _omega0_m*cosmo.C/cosmo.H0)
+    def jvp(node, Omega0_m_, omega0_m, z, cosmo):
+        #Find derivative with respevct to omega_0 and mult by Omega0_m_
+        Omega0_m_   *= omega0_m_ * quad(deriv_integral, 0, z, args=(omega0_m))[0]
         #Multiply by hubble distance
-        return dict(chi_ = omega0_m_*cosmo.C/cosmo.H0)
+        return dict(chi_ = Omega0_m_*cosmo.C/cosmo.H0)
 @operator
 class z_chi:
     """
@@ -259,7 +259,7 @@ class WLSimulation(FastPMSimulation):
         """
 
         q = pm.generate_uniform_particle_grid(shift=0.)
-        FastPMSimulation.__init__(self, stages, cosmology.Omega0_m, cosmology, pm, params['B'], q)
+        FastPMSimulation.__init__(self, stages, cosmology, pm, params['B'], q)
 
         # source redshifts and distances
         self.zs      = params['zs_source']
@@ -347,11 +347,11 @@ class WLSimulation(FastPMSimulation):
 
 
     # can we remove p here?
-    @autooperator('dx, p, kmaps, omega0_m ->kmaps')
-    def interp(self, dx, p, kmaps, omega0_m, dx_PGD, ax, ap, ai, af):
+    @autooperator('dx, p, kmaps, Omega0_m ->kmaps')
+    def interp(self, dx, p, kmaps, Omega0_m, dx_PGD, ax, ap, ai, af):
 
-        di = chi_z(1. /ai - 1., omega0_m, self.cosmo)
-        df = chi_z(1. /af - 1., omega0_m, self.cosmo)
+        di = chi_z(Omega0_m, 1. /ai - 1., self.cosmo)
+        df = chi_z(Omega0_m, 1. /af - 1.,self.cosmo)
         df_value = self.cosmo.comoving_distance(1./af-1. )
         di_value = self.cosmo.comoving_distance(1./ai - 1.)
         for M in self.imgen.generate(di_value, df_value):
@@ -385,8 +385,8 @@ class WLSimulation(FastPMSimulation):
         return kmaps
 
 
-    @autooperator('rhok, omega0_m->kmaps')
-    def run_interpolated(self, rhok, omega0_m):
+    @autooperator('rhok, Omega0_m->kmaps')
+    def run_interpolated(self, rhok, Omega0_m):
 
         def getrss():
             usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -430,7 +430,7 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p, kmaps,omega0_m, dx_PGD, ac, ac, ai, af)
+            kmaps = self.interp(dx, p, kmaps,Omega0_m, dx_PGD, ac, ac, ai, af)
 
             # drift
             ddx = p * self.DriftFactor(ac, ac, af)
@@ -444,10 +444,10 @@ class WLSimulation(FastPMSimulation):
             p  = p + dp
 
 
-        return dict(kmaps=kmaps)
+        return kmaps
 
-    @autooperator('rhok->kmaps')
-    def run(self, rhok):
+    @autooperator('rhok, Omega0_m ->kmaps')
+    def run(self, rhok, Omega0_m):
         import resource
         def getrss():
             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
@@ -470,8 +470,8 @@ class WLSimulation(FastPMSimulation):
         for ai, af in zip(stages[:-1], stages[1:]):
 
             di_value, df_value = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
-            di = chi_z(1. /ai - 1., omega0_m, self.cosmo)
-            df = chi_z(1. /af - 1., omega0_m, self.cosmo)
+            di = chi_z(Omega0_m, 1. /ai - 1., self.cosmo)
+            df = chi_z(Omega0_m, 1. /af - 1., self.cosmo)
 
 
             # central scale factor
@@ -493,7 +493,7 @@ class WLSimulation(FastPMSimulation):
 
             dx_out   = dx+dx_
 
-            for M in self.imgen.generate(di, df):
+            for M in self.imgen.generate(di_value, df_value):
                 # if lower end of box further away than source -> do nothing
                 if df_value>self.max_ds:
                     continue
@@ -550,11 +550,14 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
 
     #Build power operator for initial conditions
     pklin_init      = dict(Omega0_m=cosmo.Omega0_m)
-    norm = normalize(8,cosmo, transfer='NWEH', kmin=1e-5, kmax=1e1)
+    norm = normalize(8,cosmo, transfer=params['Transfer_func'], kmin=1e-5, kmax=1e1)
     # gerate initial conditions
     cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
-    rho       = rho.apply(lambda k, v:(norm*get_Pk_NWEH.build(cosmo=cosmo,  z=0, k=k.normp(p=2, zeromode=1)).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
+    if params['Transfer_func']=='EH':
+        rho       = rho.apply(lambda k, v:(norm*get_Pk_EH.build(cosmo=cosmo,  z=0, k=k.normp(p=2, zeromode=1)).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
+    elif params['transfer_func'] =='NWEH':
+        rho       = rho.apply(lambda k, v:(norm*get_Pk_NWEH.build(cosmo=cosmo,  z=0, k=k.normp(p=2, zeromode=1)).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
 
@@ -569,10 +572,10 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
 
     # compute
 
-    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho, omega0_m=cosmo.Omega0_m))
+    kmaps, tape     = model.compute(vout='kmaps', init=dict(rhok=rho, Omega0_m=cosmo.Omega0_m), return_tape=True)
 
-    kmaps_deriv = None
+#    kmaps_deriv = None
     if params['mode']=='backprop':
-        kmap_deriv = model.compute_with_vjp(init=dict(rhok=rho.r2c()), v=dict(_kmap=kmap))
-
+#        kmaps_deriv = model.compute_with_vjp(init=dict(rhok=rho, Omega0_m=cosmo.Omega0_m), v=dict(_kmaps=kmaps))
+        kmaps_deriv = tape.get_vjp().compute(init=dict(_kmaps=1), vout=('_rhok', '_Omega0_m'))
     return kmaps, kmaps_deriv, pm
