@@ -1,21 +1,23 @@
-from vmad import autooperator, operator
+from vmad import autooperator, operator, Builder
 from vmad.core import stdlib
 from vmad.lib import fastpm
 from vmad.lib import linalg
 from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
+from nbodykit.cosmology import Planck15
 import numpy
 from vmad.lib.linalg import sum, mul
-import scipy 
+import scipy
 from mpi4py import MPI
 import numpy as np
 import MADLens.PGD as PGD
 from MADLens.util import save_snapshot, save3Dpower
 from nbodykit.lab import FFTPower, ArrayCatalog
+from MADLens.power import get_Pk_EH, get_Pk_NWEH, normalize
 import pickle
 import os
 import errno
 import resource
-
+from scipy.integrate import quad
 
 @operator
 class list_elem:
@@ -32,9 +34,9 @@ class list_elem:
     def vjp(node, _y, i):
         pass
 
-@operator 
+@operator
 class list_put:
-    """ 
+    """
     put an item into a list
     """
     ain = {'x': 'ndarray', 'item':'ndarray'}
@@ -52,23 +54,32 @@ class list_put:
 
 def get_interp_factors(x_,x,y):
     indices = np.searchsorted(x, x_)
-    
+
     #ensure periodic boundary conditions
     y = np.append(y, y[-1])
     y = np.append(y, y[0])
-    
+
     #ensure that x[indices] is defined for all indices (value is unimportant)
     x = np.append(x, x[-1]+1)
     factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
     return factors
 
-    
+
+def deriv_integral(x, Omega0_m):
+    """
+    Derivative of the comoving distance with respect to matter density
+    """
+    #Create the denominator of the integral
+    E = (Omega0_m * ((1+x)**3 -1)+ 1)**(-3/2)
+    diriv_factor = (-1/2) * ((1+x)**3-1)
+
+    return E*diriv_factor
 
 #TODO: add support for derivative here
 @operator
 class DriftFactor:
     """
-    Drift Factor for evolution around central redshift 
+    Drift Factor for evolution around central redshift
     """
     ain = {'af':'ndarray'}
     aout= {'drift':'ndarray'}
@@ -83,6 +94,7 @@ class DriftFactor:
     def jvp(node,af_,ai,ac,pt):
         pass#factors = get_interpolation_factors(af_,pt.)
 
+#Max's Operator for matter
 @operator
 class chi_z:
     """
@@ -93,20 +105,38 @@ class chi_z:
 
     def apl(node, z, cosmo):
         return dict(chi = cosmo.comoving_distance(z))
-    
+
     def vjp(node, _chi, z, cosmo):
         res = 1./cosmo.efunc(z)/cosmo.H0*cosmo.C
         return dict(_z = numpy.multiply(res,_chi))
-    
+
     def jvp(node, z_, z, cosmo):
         res = 1./cosmo.efunc(z)/cosmo.H0*cosmo.C
         return dict(chi_ = numpy.multiply(res,z_))
-    
-    
+
+
+    ain  = {'Omega0_m': 'float'}
+    aout = {'chi':'float'}
+
+    def apl(node, Omega0_m, z, cosmo):
+        #Calculate the integral from 0->z
+        E         = lambda x: (Omega0_m  * ((1+x)**3 -1)+1)**(-1/2)
+        Dc , _    = quad(E, 0, z)
+        return dict(chi = Dc*cosmo.C/cosmo.H0)
+    def vjp(node, _chi, Omega0_m, z, cosmo):
+        #Return the derivative of the integral WR2 Omega0_m and mult by _chi
+        _Omega0_m  =  _chi  *  quad(deriv_integral, 0, z, args=(omega0_m))[0]
+        #Multiply by hubble distance and return
+        return dict(_Omega0_m = _omega0_m*cosmo.C/cosmo.H0)
+    def jvp(node, Omega0_m_, omega0_m, z, cosmo):
+        #Find derivative with respevct to omega_0 and mult by Omega0_m_
+        Omega0_m_   *= omega0_m_ * quad(deriv_integral, 0, z, args=(omega0_m))[0]
+        #Multiply by hubble distance
+        return dict(chi_ = Omega0_m_*cosmo.C/cosmo.H0)
 @operator
 class z_chi:
     """
-    go from redshift to comoving distance 
+    go from redshift to comoving distance
     """
 
     ain  = {'chi' : 'ndarray'}
@@ -114,19 +144,19 @@ class z_chi:
 
     def apl(node, chi, cosmo, z_chi_int):
         return dict(z = z_chi_int(chi))
-    
+
     def vjp(node, _z, z, cosmo, z_chi_int):
         res = cosmo.efunc(z)*cosmo.H0/cosmo.C
         return dict(_chi = res*_z)
-    
+
     def jvp(node, chi_, z, cosmo, z_chi_int):
         res = cosmo.efunc(z)*cosmo.H0/cosmo.C
         return dict(z_ = res*chi_)
-    
+
 
 def get_PGD_params(B,res,n_steps,pgd_dir):
     """
-    loads PGD params from file 
+    loads PGD params from file
     B:      force resolution parameter
     res:    resolution: Boxsize/Nmesh
     nsteps: number of fastpm steps
@@ -163,7 +193,7 @@ class ImageGenerator:
         """
 
         self.BoxSize    = pm.BoxSize
-        self.chi_source = ds 
+        self.chi_source = ds
         self.vert_num   = np.int32(vert_num)
         # basis vectors
         x      = np.asarray([1,0,0])
@@ -171,14 +201,14 @@ class ImageGenerator:
         z      = np.asarray([0,0,1])
         # identity shift
         self.I = np.zeros(3)
-        
+
         # shuffle directions, only 90 deg rotations, makes a total of 6
         self.M_matrices = [np.asarray([x,y,z]), np.asarray([x,z,y]),np.asarray([z,y,x]),np.asarray([z,x,y]), \
                              np.asarray([y,x,z]), np.asarray([y,z,x])]
-        
+
         # shifts (only repeat the box twice in x and y)
-        self.xyshifts = [np.asarray([0.5,0.5,0.]),np.asarray([-0.5,0.5,0.]),np.asarray([-0.5,-0.5,0.]),np.asarray([0.5,-0.5,0.])]      
-        
+        self.xyshifts = [np.asarray([0.5,0.5,0.]),np.asarray([-0.5,0.5,0.]),np.asarray([-0.5,-0.5,0.]),np.asarray([0.5,-0.5,0.])]
+
         # make sure we cover entire redshift range
         self.len = len(self.M_matrices)
         if self.len*pm.BoxSize[-1]>ds:
@@ -187,20 +217,20 @@ class ImageGenerator:
         else:
             if pm.comm.rank==0:
                 print('insufficient number of rotations to fill lightcone')
-        
+
         self.x = x
         self.z = z
-        
-    
+
+
     def generate(self, di, df):
         """ Returns a list of rotation matrices and shifts that are applied to the box
         di : distance to inital redshift (before taking fastpm step)
         df : distance to final redshift (after taking fastpm step)
         """
-        
+
         if df>self.chi_source:
             return 0, 0
-        else:    
+        else:
             shift_ini = np.floor(max(di,self.chi_source)/self.BoxSize[-1])
             shift_end = np.floor(df/self.BoxSize[-1])
             M = []
@@ -215,11 +245,11 @@ class ImageGenerator:
                 raise ValueError('vertical number of boxes must be 1 or 2, but is %d'%self.vert_num)
 
             return M
-        
-    
-    
+
+
+
 class WLSimulation(FastPMSimulation):
-    def __init__(self, stages, cosmology, pm, params, boxsize2D):
+    def __init__(self, stages,  cosmology, pm, params, boxsize2D):
         """
         stages:    1d array of floats. scale factors at which to evaluate fastpm simulation (fastpm steps)
         cosmology: nbodykit cosmology object
@@ -228,7 +258,7 @@ class WLSimulation(FastPMSimulation):
         boxsize2D: list, fov in radians
         """
 
-        q = pm.generate_uniform_particle_grid(shift=0.)        
+        q = pm.generate_uniform_particle_grid(shift=0.)
         FastPMSimulation.__init__(self, stages, cosmology, pm, params['B'], q)
 
         # source redshifts and distances
@@ -236,7 +266,7 @@ class WLSimulation(FastPMSimulation):
         self.ds      = np.asarray([cosmology.comoving_distance(zs) for zs in self.zs])
         # maximal distance at which particles need to be read out
         self.max_ds  = max(self.ds)
-        
+
         # redshift as a function of comsoving distance for underlying cosmology
         z_int          = np.logspace(-8,np.log10(1500),10000)
         chis           = cosmology.comoving_distance(z_int) #Mpc/h
@@ -248,23 +278,23 @@ class WLSimulation(FastPMSimulation):
             print('number of box replications required to fill field of view: %.1f'%self.vert_num)
 
         # ImageGenerator defines box rotations and shifts
-        self.imgen = ImageGenerator(pm,self.max_ds,self.vert_num)       
+        self.imgen = ImageGenerator(pm,self.max_ds,self.vert_num)
         # 2D mesh object for convergence field
         self.mappm = ParticleMesh(BoxSize=boxsize2D, Nmesh=params['Nmesh2D'], comm=pm.comm, np=pm.np, resampler='cic')
         self.mappm.affine.period[...] = 0 # disable the periodicity
-        
+
         self.cosmo = cosmology
         self.params= params
         if self.params['PGD']:
             self.kl, self.ks, self.alpha0, self.mu = get_PGD_params(params['B'],res=pm.BoxSize[0]/pm.Nmesh[0],n_steps=params['N_steps'],pgd_dir=params['PGD_path'])
-          
+
         # mean 3D particle density
         self.nbar    = pm.comm.allreduce(len(self.q))/pm.BoxSize.prod()
         # 2D mesh area in rad^2 per pixel
         self.A       = self.mappm.BoxSize.prod()/self.mappm.Nmesh.prod()
         # redshift independent prefactor from Poisson equation
         self.factor  = 3./2.*self.cosmo.Omega0_m*(self.cosmo.H0/self.cosmo.C)**2
-      
+
     @autooperator('x->xy, d')
     def rotate(self, x, M, boxshift):
         """
@@ -273,12 +303,12 @@ class WLSimulation(FastPMSimulation):
         M:        rotation matrix
         boxshift: shift vector
         """
-        y  = linalg.einsum('ij,kj->ki', (M, x))     
+        y  = linalg.einsum('ij,kj->ki', (M, x))
         y  = y + self.pm.BoxSize * boxshift
         d  = linalg.take(y, 2, axis=1)
         xy = linalg.take(y, (0, 1), axis=1)
         return dict(xy=xy, d=d)
-    
+
     @autooperator('d->w')
     def wlen(self, d, ds):
         """
@@ -303,28 +333,30 @@ class WLSimulation(FastPMSimulation):
             raise RuntimeError("The ParticeMesh object must be non-periodic")
         if self.mappm.ndim != 2:
             raise RuntimeError("The ParticeMesh object must be 2 dimensional. ")
-            
+
         compensation = self.mappm.resampler.get_compensation()
-        
+
         layout       = fastpm.decompose(xy, self.mappm)
         map          = fastpm.paint(xy, w, layout, self.mappm)
         # compensation for cic window
         c            = fastpm.r2c(map)
         c            = fastpm.apply_transfer(c, lambda k : compensation(k, 1.0), kind='circular')
         map          = fastpm.c2r(c)
-        
+
         return map
-            
+
 
     # can we remove p here?
-    @autooperator('dx, p, kmaps->kmaps')
-    def interp(self, dx, p, kmaps, dx_PGD, ax, ap, ai, af):
+    @autooperator('dx, p, kmaps, Omega0_m ->kmaps')
+    def interp(self, dx, p, kmaps, Omega0_m, dx_PGD, ax, ap, ai, af):
 
-        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
-
-        for M in self.imgen.generate(di, df):
+        di = chi_z(Omega0_m, 1. /ai - 1., self.cosmo)
+        df = chi_z(Omega0_m, 1. /af - 1.,self.cosmo)
+        df_value = self.cosmo.comoving_distance(1./af-1. )
+        di_value = self.cosmo.comoving_distance(1./ai - 1.)
+        for M in self.imgen.generate(di_value, df_value):
             # if lower end of box further away than source -> do nothing
-            if df>self.max_ds:
+            if df_value>self.max_ds:
                 continue
             else:
                 M, boxshift = M
@@ -341,10 +373,11 @@ class WLSimulation(FastPMSimulation):
 
                 # projection
                 xy       = (((xy - self.pm.BoxSize[:2]* 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
-                    
+
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+
+                    mask     = stdlib.eval([d,di,df], lambda args, ds=ds, d_approx=d_approx: 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0]<=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor
                     kmap     = list_elem(kmaps, ii)
                     kmaps    = list_put(kmaps,kmap_+kmap,ii)
@@ -352,12 +385,12 @@ class WLSimulation(FastPMSimulation):
         return kmaps
 
 
-    @autooperator('rhok->kmaps')
-    def run_interpolated(self, rhok):
+    @autooperator('rhok, Omega0_m->kmaps')
+    def run_interpolated(self, rhok, Omega0_m):
 
         def getrss():
             usage = resource.getrusage(resource.RUSAGE_SELF)
-            names=('ru_utime','ru_stime','ru_maxrss','ru_ixrss','ru_idrss') 
+            names=('ru_utime','ru_stime','ru_maxrss','ru_ixrss','ru_idrss')
             descs=('User time','System time','Max. Resident Set Size','Shared Memory Size','Unshared Memory Size')
             return usage, descs, names
 
@@ -369,7 +402,7 @@ class WLSimulation(FastPMSimulation):
 
         powers = []
         kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
-        
+
         f, potk= self.gravity(dx)
 
         for ai, af in zip(stages[:-1], stages[1:]):
@@ -397,7 +430,7 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p, kmaps, dx_PGD, ac, ac, ai, af)
+            kmaps = self.interp(dx, p, kmaps,Omega0_m, dx_PGD, ac, ac, ai, af)
 
             # drift
             ddx = p * self.DriftFactor(ac, ac, af)
@@ -409,12 +442,12 @@ class WLSimulation(FastPMSimulation):
             # kick
             dp = f * (self.KickFactor(ac, af, af) * 1.5 * Om0)
             p  = p + dp
-        
-        
-        return dict(kmaps=kmaps)
 
-    @autooperator('rhok->kmaps')
-    def run(self, rhok):
+
+        return kmaps
+
+    @autooperator('rhok, Omega0_m ->kmaps')
+    def run(self, rhok, Omega0_m):
         import resource
         def getrss():
             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
@@ -433,12 +466,14 @@ class WLSimulation(FastPMSimulation):
 
         f, potk= self.gravity(dx)
 
-        ii = 0 
+        ii = 0
         for ai, af in zip(stages[:-1], stages[1:]):
-            
-            di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
 
-            
+            di_value, df_value = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+            di = chi_z(Omega0_m, 1. /ai - 1., self.cosmo)
+            df = chi_z(Omega0_m, 1. /af - 1., self.cosmo)
+
+
             # central scale factor
             ac = (ai * af) ** 0.5
 
@@ -458,25 +493,25 @@ class WLSimulation(FastPMSimulation):
 
             dx_out   = dx+dx_
 
-            for M in self.imgen.generate(di, df):
+            for M in self.imgen.generate(di_value, df_value):
                 # if lower end of box further away than source -> do nothing
-                if df>self.max_ds:
+                if df_value>self.max_ds:
                     continue
                 else:
                     M, boxshift = M
                     xy, d    = self.rotate((dx_out + q)%self.pm.BoxSize, M, boxshift)
                     d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=q))
-            
+
                     xy       = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
 
                     for ii, ds in enumerate(self.ds):
                         w     = self.wlen(d,ds)
-                        mask  = stdlib.eval(d, lambda d, di=di, df=df, ds=self.ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                        mask  = stdlib.eval([d,di,df], lambda args, ds=ds, d_approx=d_approx: 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0]<=ds))
                         kmap_ = self.makemap(xy, w*mask)*self.factor
                         kmap  = list_elem(kmaps,ii)
                         kmaps = list_put(kmaps,kmap_+kmap,ii)
 
-            
+
             if self.params['save3D'] or self.params['save3Dpower']:
                 zf       = 1./af-1.
                 zi       = 1./ai-1.
@@ -506,22 +541,28 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
 
     # particle mesh for fastpm simulation
     pm        = fastpm.ParticleMesh(Nmesh=params['Nmesh'], BoxSize=params['BoxSize'], comm=MPI.COMM_WORLD, resampler='cic')
-    
+
     # 2D FOV in radians
     BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
 
     np.random.seed(randseed)
     randseeds = np.random.randint(0,1e6,100)
 
-    # generate initial conditions
+    #Build power operator for initial conditions
+    pklin_init      = dict(Omega0_m=cosmo.Omega0_m)
+    norm = normalize(8,cosmo, transfer=params['Transfer_func'], kmin=1e-5, kmax=1e1)
+    # gerate initial conditions
     cosmo     = cosmo.clone(P_k_max=30)
     rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
-    rho       = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
+    if params['Transfer_func']=='EH':
+        rho       = rho.apply(lambda k, v:(norm*get_Pk_EH.build(cosmo=cosmo,  z=0, k=k.normp(p=2, zeromode=1)).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
+    elif params['transfer_func'] =='NWEH':
+        rho       = rho.apply(lambda k, v:(norm*get_Pk_NWEH.build(cosmo=cosmo,  z=0, k=k.normp(p=2, zeromode=1)).compute(init=pklin_init, vout='Pk')) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
 
     # weak lensing simulation object
-    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
+    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True),cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
 
     #build
     if params['interpolate']:
@@ -530,11 +571,11 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         model     = wlsim.run.build()
 
     # compute
-    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
-    
-    # compute derivative if requested 
-    kmaps_deriv = None
-    if params['mode']=='backprop': 
-        kmap_deriv = model.compute_with_vjp(init=dict(rhok=rho.r2c()), v=dict(_kmap=kmap))
 
+    kmaps, tape     = model.compute(vout='kmaps', init=dict(rhok=rho, Omega0_m=cosmo.Omega0_m), return_tape=True)
+
+#    kmaps_deriv = None
+    if params['mode']=='backprop':
+#        kmaps_deriv = model.compute_with_vjp(init=dict(rhok=rho, Omega0_m=cosmo.Omega0_m), v=dict(_kmaps=kmaps))
+        kmaps_deriv = tape.get_vjp().compute(init=dict(_kmaps=1), vout=('_rhok', '_Omega0_m'))
     return kmaps, kmaps_deriv, pm
