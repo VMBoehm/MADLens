@@ -26,12 +26,11 @@ flags.DEFINE_float('boxsize2D',6.37616,'field of view in degrees (default is opt
 flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
-flags.DEFINE_float('Omega0_m_sigma',.0073 , '1 sigma of matter density')
-flags.DEFINE_integer('undershoot', 4,'number of omega_m stds for maximal comoving distance')
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
 flags.DEFINE_spaceseplist('zs_source',['1.'],'source redshifts')
+flags.DEFINE_string('Transfer_func', 'EH', 'Transfer functions, Eisenstein-Hu or No Wiggles Eisenstein-Hu, options are EH, NWEH')
 flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',False,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
@@ -50,11 +49,11 @@ def main(argv):
     del argv
 
     """ -------------- setting paramaeters ------------------------"""
-    params              = FLAGS.flag_values_dict() 
+    params              = FLAGS.flag_values_dict()
     params['Nmesh']     = [FLAGS.Nmesh]*3
-    params['BoxSize']   = [FLAGS.boxsize]*3 
-    params['Nmesh2D']   = [FLAGS.Nmesh2D]*2 
-    params['BoxSize2D'] = [FLAGS.boxsize2D]*2 
+    params['BoxSize']   = [FLAGS.boxsize]*3
+    params['Nmesh2D']   = [FLAGS.Nmesh2D]*2
+    params['BoxSize2D'] = [FLAGS.boxsize2D]*2
     params['zs_source'] = [float(zs) for zs in FLAGS.zs_source]
 
     cosmo = Planck15.match(Omega0_m=FLAGS.Omega_m)
@@ -67,11 +66,11 @@ def main(argv):
             raise ValueError('interpolate must be set to False if requesting 3D outouts')
 
     """------- setting output dirs and saving parameters-----------"""
-    dirs = {} 
-    if rank ==0: 
+    dirs = {}
+    if rank ==0:
         cmd    = "git log --pretty=format:'%h' -n 1"
         githash= subprocess.run([cmd], stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
-    
+
         results_path = os.path.join(FLAGS.results_path,githash)
         params_path  = os.path.join(os.path.join(os.getcwd()),'runs',githash)
         params['results_path'] = results_path
@@ -114,7 +113,7 @@ def main(argv):
 
     """---------------------------run actual simulations-----------------------------"""
     sims_start = time.time()
-        
+
     for ii in range(FLAGS.N_maps):
         print('progress in percent:', ii/params['N_maps']*100)
         kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=ii)
@@ -124,7 +123,7 @@ def main(argv):
             mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
             save_2Dmap(kmap,mapfile)
             print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))
-            
+
             bink,binpow,N = get_2Dpower(kmap)
             len_k = len(bink)
             if rank ==0:
