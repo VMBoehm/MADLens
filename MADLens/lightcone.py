@@ -17,71 +17,113 @@ import errno
 import resource
 
 
+
+def BinarySearch_Left(mylist, items):
+    print(mylist, items)
+    "finds where to insert elements into a sorted array, this is the equivalent of numpy.searchsorted"
+    results =[]
+    for item in items:
+        if item>=max(mylist):
+            results.append(len(mylist))
+        elif item<=min(mylist):
+            results.append(0)
+        else:
+            results.append(binarysearch_left(mylist,item, low=0, high=len(mylist)-1))
+    return np.asarray(results, dtype=int)
+
+def binarysearch_left(A, value, low, high):
+    "left binary search"
+    if (high < low):
+        return low
+    mid = (low + high) //2
+    if (A[mid] >= value):
+        return binarysearch_left(A, value, low, mid-1)
+    else:
+        return binarysearch_left(A, value, mid+1, high)
+
+
+class mod_list(list):
+    def __add__(self,other):
+        assert(len(other)==len(self))
+        return [self[ii]+other[ii] for ii in range(len(self))]
+
+
 @operator
 class list_elem:
     """
     take an item from a list
     """
-    ain = {'x' : 'ndarray',}
-    aout = {'y' : 'ndarray'}
+    ain = {'x' : '*',}
+    aout = {'elem' : '*'}
 
     def apl(node, x, i):
-        y = x[i]
-        return dict(y=y)
+        elem = x[i]
+        print('apl:', numpy.shape(elem))
+        return dict(elem=elem, x_shape=[numpy.shape(xx) for xx in x])
 
-    def vjp(node, _y, i):
-        pass
+    def vjp(node, _elem, x_shape, i):
+        print('vjp:', numpy.shape(_elem))
+        _x       = []
+        for ii in range(len(x_shape)):
+            _x.append(numpy.zeros(x_shape[ii],dtype='f8'))
+        _x[i][:] = _elem
 
-@operator 
+        return dict(_x=_x)
+        
+    def jvp(node,x_, x, i):
+        elem_ = x_[i]
+        return dict(elem_=elem_)
+
+
+
+@operator
 class list_put:
     """ 
     put an item into a list
     """
-    ain = {'x': 'ndarray', 'item':'ndarray'}
+    ain = {'x': 'ndarray', 'elem': 'ndarray'}
     aout = {'y': 'ndarray'}
 
-    def apl(node, x, item, i):
-        x[i] = item
-        y = x
-        return dict(y=y)
+    def apl(node, x, elem, i):
+        y    = x
+        x[i] = elem
+        return dict(y=y, len_x = len(x))
 
-    def vjp(node, _y, i):
-        pass
+    def vjp(node, _y, len_x, i):
+        _elem    = _y[i]
+        _x       = mod_list([0 for ii in range(len_x)])
+        return dict(_x=_x, _elem=_elem)
+
+    def jvp(node, x_, elem_, x, i):
+        x_       = numpy.vstack(x_)
+        deriv    = numpy.ones(len(x))
+        deriv[i] = 0
+        deriv_   = numpy.zeros(len(x))
+        deriv_[i]= 1
+        y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('j,i->ji',deriv_,elem_)
+        return dict(y_=y_)
 
 
-
-def get_interp_factors(x_,x,y):
-    indices = np.searchsorted(x, x_)
-    
-    #ensure periodic boundary conditions
-    y = np.append(y, y[-1])
-    y = np.append(y, y[0])
+#def get_interp_factors(x_,x,y):
+#    indices = np.searchsorted(x, x_)
+#    
+#    #ensure periodic boundary conditions
+#    y = np.append(y, y[-1#])
+#    y = np.append(y, y[0])
     
     #ensure that x[indices] is defined for all indices (value is unimportant)
-    x = np.append(x, x[-1]+1)
-    factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
-    return factors
+#    x = np.append(x, x[-1]+1)
+#    factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
+#    return factors
 
     
 
-#TODO: add support for derivative here
-@operator
-class DriftFactor:
-    """
-    Drift Factor for evolution around central redshift 
-    """
-    ain = {'af':'ndarray'}
-    aout= {'drift':'ndarray'}
+#TODO: if pt has derivative, make this an autooperator
+#@autooperator('af->drift')
+#def DriftFactor(self,af,ai,ac,pt):
+#    drift = 1 / (ac ** 3 * pt.E(ac)) * (pt.Gp(af) - pt.Gp(ai)) / pt.gp(ac)
+#    return drift
 
-    def apl(node,af,ai,ac,pt):
-        result = 1 / (ac ** 3 * pt.E(ac)) * (pt.Gp(af) - pt.Gp(ai)) / pt.gp(ac)
-        return dict(drift=result)
-
-    def vjp(node,_drift,ai,ac,pt):
-        pass
-
-    def jvp(node,af_,ai,ac,pt):
-        pass#factors = get_interpolation_factors(af_,pt.)
 
 @operator
 class chi_z:
@@ -314,7 +356,25 @@ class WLSimulation(FastPMSimulation):
         map          = fastpm.c2r(c)
         
         return map
-            
+
+    @autooperator('af->drift')
+    def mod_DriftFactor(self,af,ai,ac,pt):
+        drift = 1 / (ac ** 3 * pt.E(ac)) * (self.mod_Gp(af,0) - pt.Gp(ai)) / pt.gp(ac)
+        return drift
+    
+    @autooperator('a->D1')
+    def mod_Gp(self, a, order):
+        lna = linalg.log(a)
+        y   = self.pt._D1[:,order]
+        x   = self.pt.lna
+        indices = stdlib.eval(lna, lambda lna, x = x: BinarySearch_Left(x, lna))
+        
+        y = np.append(y, y[-1])
+        y = np.append(y, y[0])
+        x = np.append(x, x[-1]+1)
+        factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
+        D1      = y[indices-1]+factors*(lna-x[indices-1])
+        return D1
 
     # can we remove p here?
     @autooperator('dx, p, kmaps->kmaps')
@@ -334,7 +394,7 @@ class WLSimulation(FastPMSimulation):
                 a_approx = 1. / (z_chi(d_approx, self.cosmo, self.z_chi_int) + 1.)
 
                 # move particles to a_approx, then add PGD correction
-                dx1      = dx + linalg.einsum("ij,i->ij", [p,DriftFactor(a_approx, ax, ap, self.pt)]) + dx_PGD
+                dx1      = dx + linalg.einsum("ij,i->ij", [p,self.mod_DriftFactor(a_approx, ax, ap, self.pt)]) + dx_PGD
 
                 # rotate their positions
                 xy, d    = self.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
@@ -345,10 +405,11 @@ class WLSimulation(FastPMSimulation):
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    kmap     = list_elem(kmaps,ii)
                     kmap_    = self.makemap(xy, w*mask)*self.factor
-                    kmap     = list_elem(kmaps, ii)
-                    kmaps    = list_put(kmaps,kmap_+kmap,ii)
-
+                    kmap     = linalg.add(kmap_,kmap)
+                    kmaps    = list_put(kmaps,kmap,ii)
+         
         return kmaps
 
 
@@ -368,7 +429,7 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers = []
-        kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
+        kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
         
         f, potk= self.gravity(dx)
 
@@ -430,7 +491,7 @@ class WLSimulation(FastPMSimulation):
 
         powers =[]
         kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
-
+        
         f, potk= self.gravity(dx)
 
         ii = 0 
@@ -452,7 +513,7 @@ class WLSimulation(FastPMSimulation):
 
             if self.params['PGD']:
                 alpha    = self.alpha0*af**self.mu
-                dx_      = PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
+                dx_      = PGD.PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
             else:
                 dx_      = 0.
 
@@ -470,12 +531,12 @@ class WLSimulation(FastPMSimulation):
                     xy       = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
 
                     for ii, ds in enumerate(self.ds):
-                        w     = self.wlen(d,ds)
-                        mask  = stdlib.eval(d, lambda d, di=di, df=df, ds=self.ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                        kmap_ = self.makemap(xy, w*mask)*self.factor
-                        kmap  = list_elem(kmaps,ii)
-                        kmaps = list_put(kmaps,kmap_+kmap,ii)
-
+                        w        = self.wlen(d,ds)
+                        mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                        kmap_    = self.makemap(xy, w*mask)*self.factor   
+                        kmap     = list_elem(kmaps,ii)
+                        kmap     = linalg.add(kmap_,kmap)
+                        kmaps    = list_put(kmaps,kmap,ii)
             
             if self.params['save3D'] or self.params['save3Dpower']:
                 zf       = 1./af-1.
@@ -530,11 +591,16 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         model     = wlsim.run.build()
 
     # compute
-    kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
-    
+    if params['mode']=='backprop':
+        kmaps, tape = model.compute(vout='kmaps', init=dict(rhok=rho),return_tape=True)
+    else:
+        kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
     # compute derivative if requested 
-    kmaps_deriv = None
+    kmap_vjp,kmap_jvp = [None, None]
     if params['mode']=='backprop': 
-        kmap_deriv = model.compute_with_vjp(init=dict(rhok=rho.r2c()), v=dict(_kmap=kmap))
+        vjp      = tape.get_vjp()
+        kmap_vjp = vjp.compute(init=dict(_kmaps=kmaps), vout='_rhok')
+        #jvp      = tape.get_jvp()
+        #kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
 
-    return kmaps, kmaps_deriv, pm
+    return kmaps, [kmap_vjp,kmap_jvp], pm
