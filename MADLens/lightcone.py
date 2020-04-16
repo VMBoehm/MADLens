@@ -377,7 +377,7 @@ class WLSimulation(FastPMSimulation):
         return D1
 
     # can we remove p here?
-    @autooperator('dx, p, kmaps->kmaps')
+    @autooperator('dx, p, kmaps, dx_PGD->kmaps')
     def interp(self, dx, p, kmaps, dx_PGD, ax, ap, ai, af):
 
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
@@ -391,10 +391,12 @@ class WLSimulation(FastPMSimulation):
 
                 # positions of unevolved particles after rotation
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
-                a_approx = 1. / (z_chi(d_approx, self.cosmo, self.z_chi_int) + 1.)
-
+                z_approx = z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.z_chi_int,chi=d_approx)['z']
+                a_approx = 1. / (z_approx + 1.)
+                
                 # move particles to a_approx, then add PGD correction
-                dx1      = dx + linalg.einsum("ij,i->ij", [p,self.mod_DriftFactor(a_approx, ax, ap, self.pt)]) + dx_PGD
+                
+                dx1      = dx + p*self.DriftFactor(a_approx, ax, ap)[:, None] + dx_PGD
 
                 # rotate their positions
                 xy, d    = self.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
