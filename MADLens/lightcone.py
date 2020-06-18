@@ -602,7 +602,7 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     if params['mode']=='backprop': 
         vjp      = tape.get_vjp()
         kmap_vjp = vjp.compute(init=dict(_kmaps=kmaps), vout='_rhok')
-        #jvp      = tape.get_jvp()
-        #kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
+        jvp      = tape.get_jvp()
+        kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
 
     return kmaps, [kmap_vjp,kmap_jvp], pm
