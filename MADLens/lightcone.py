@@ -58,11 +58,9 @@ class list_elem:
 
     def apl(node, x, i):
         elem = x[i]
-        print('apl:', numpy.shape(elem))
         return dict(elem=elem, x_shape=[numpy.shape(xx) for xx in x])
 
     def vjp(node, _elem, x_shape, i):
-        print('vjp:', numpy.shape(_elem))
         _x       = []
         for ii in range(len(x_shape)):
             _x.append(numpy.zeros(x_shape[ii],dtype='f8'))
@@ -102,28 +100,6 @@ class list_put:
         deriv_[i]= 1
         y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('j,i->ji',deriv_,elem_)
         return dict(y_=y_)
-
-
-#def get_interp_factors(x_,x,y):
-#    indices = np.searchsorted(x, x_)
-#    
-#    #ensure periodic boundary conditions
-#    y = np.append(y, y[-1#])
-#    y = np.append(y, y[0])
-    
-    #ensure that x[indices] is defined for all indices (value is unimportant)
-#    x = np.append(x, x[-1]+1)
-#    factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
-#    return factors
-
-    
-
-#TODO: if pt has derivative, make this an autooperator
-#@autooperator('af->drift')
-#def DriftFactor(self,af,ai,ac,pt):
-#    drift = 1 / (ac ** 3 * pt.E(ac)) * (pt.Gp(af) - pt.Gp(ai)) / pt.gp(ac)
-#    return drift
-
 
 @operator
 class chi_z:
@@ -206,7 +182,7 @@ class ImageGenerator:
 
         self.BoxSize    = pm.BoxSize
         self.chi_source = ds 
-        self.vert_num   = np.int32(vert_num)
+        self.vert_num   = np.ceil(vert_num)
         # basis vectors
         x      = np.asarray([1,0,0])
         y      = np.asarray([0,1,0])
@@ -592,17 +568,19 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
-    # compute
-    if params['mode']=='backprop':
-        kmaps, tape = model.compute(vout='kmaps', init=dict(rhok=rho),return_tape=True)
-    else:
-        kmaps     = model.compute(vout='kmaps', init=dict(rhok=rho))
-    # compute derivative if requested 
+    # results
     kmap_vjp,kmap_jvp = [None, None]
-    if params['mode']=='backprop': 
-        vjp      = tape.get_vjp()
-        kmap_vjp = vjp.compute(init=dict(_kmaps=kmaps), vout='_rhok')
-        jvp      = tape.get_jvp()
-        kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
+    # compute
+    if params['forward'] and (params['vjp'] or params['jvp']):
+        kmaps, tape = model.compute(vout='kmaps', init=dict(rhok=rho),return_tape=True)
+        if params['vjp']:
+            vjp         = tape.get_vjp()
+            kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout='_rhok')
+        if params['jvp']:
+            jvp      = tape.get_jvp()
+            kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
+
+    if params['forward']:
+        kmaps       = model.compute(vout='kmaps', init=dict(rhok=rho))
 
     return kmaps, [kmap_vjp,kmap_jvp], pm
