@@ -8,6 +8,6 @@ setup(name='MADLens',
       author='Vanessa Martina Boehm',
       author_email='vboehm@berkeley.edu',
       license='GNU GPLv3',
-      packages=['MADLens'],
+      packages=['MADLens', 'MADLens.tests'],
       install_requires=['numpy', 'nbodykit', 'dask[array]', 'vmad', 'abopt', 'absl-py','fastpm','mpi4py','cython'],
       )

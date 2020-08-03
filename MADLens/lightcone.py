@@ -84,21 +84,23 @@ class list_put:
 
     def apl(node, x, elem, i):
         y    = x
-        x[i] = elem
+        y[i] = elem
         return dict(y=y, len_x = len(x))
 
     def vjp(node, _y, len_x, i):
         _elem    = _y[i]
-        _x       = mod_list([0 for ii in range(len_x)])
+        _x       = mod_list([_y[ii] for ii in range(len_x)])
+        _x[i]    = np.zeros_like(_elem)
         return dict(_x=_x, _elem=_elem)
 
-    def jvp(node, x_, elem_, x, i):
+    def jvp(node, x_, elem_, x, len_x, i):
         x_       = numpy.vstack(x_)
-        deriv    = numpy.ones(len(x))
+        deriv    = numpy.ones(len_x)
         deriv[i] = 0
-        deriv_   = numpy.zeros(len(x))
+        deriv_   = np.zeros(len_x)
         deriv_[i]= 1
-        y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('j,i->ji',deriv_,elem_)
+        elem     = np.expand_dims(elem_,0)
+        y_       = numpy.einsum('i,i...->i...',deriv,x_)#+numpy.einsum('i,i...->i...',deriv_,elem)
         return dict(y_=y_)
 
 @operator
@@ -271,8 +273,8 @@ class WLSimulation(FastPMSimulation):
         self.mappm = ParticleMesh(BoxSize=boxsize2D, Nmesh=params['Nmesh2D'], comm=pm.comm, np=pm.np, resampler='cic')
         self.mappm.affine.period[...] = 0 # disable the periodicity
         
-        self.cosmo = cosmology
-        self.params= params
+        self.cosmo  = cosmology
+        self.params = params
         if self.params['PGD']:
             self.kl, self.ks, self.alpha0, self.mu = get_PGD_params(params['B'],res=pm.BoxSize[0]/pm.Nmesh[0],n_steps=params['N_steps'],pgd_dir=params['PGD_path'])
           
