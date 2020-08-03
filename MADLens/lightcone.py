@@ -99,8 +99,8 @@ class list_put:
         deriv[i] = 0
         deriv_   = np.zeros(len_x)
         deriv_[i]= 1
-        elem     = np.expand_dims(elem_,0)
-        y_       = numpy.einsum('i,i...->i...',deriv,x_)#+numpy.einsum('i,i...->i...',deriv_,elem)
+        e        = np.vstack(np.repeat(elem_, len_x))
+        y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('i,i...->i...',deriv_,e)
         return dict(y_=y_)
 
 @operator
