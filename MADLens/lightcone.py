@@ -94,7 +94,7 @@ class list_put:
         return dict(_x=_x, _elem=_elem)
 
     def jvp(node, x_, elem_, x, len_x, i):
-        x_       = numpy.vstack(x_)
+        #x_       = numpy.vstack(x_)
         deriv    = numpy.ones(len_x)
         deriv[i] = 0
         deriv_   = np.zeros(len_x)
