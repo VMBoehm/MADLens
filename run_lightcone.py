@@ -35,7 +35,7 @@ flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapsho
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
 flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
-flags.DEFINE_boolean('vjp', True ,'whether to compute the vjp')
+flags.DEFINE_boolean('vjp', False ,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', False, 'whether to compute the jvp')
 flags.DEFINE_boolean('forward',True, 'whether to run forward model')
 flags.DEFINE_boolean('analyze', False, 'whether to print out resource usage')
@@ -75,6 +75,7 @@ def main(argv):
         results_path = os.path.join(FLAGS.results_path,githash)
         params_path  = os.path.join(os.path.join(os.getcwd()),'runs',githash)
         params['results_path'] = results_path
+        print(params_path)
         if not os.path.isdir(params_path):
             os.makedirs(params_path)
 

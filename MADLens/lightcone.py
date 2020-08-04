@@ -93,13 +93,13 @@ class list_put:
         _x[i]    = np.zeros_like(_elem)
         return dict(_x=_x, _elem=_elem)
 
-    def jvp(node, x_, elem_, x, len_x, i):
+    def jvp(node, x_, elem_, len_x, i):
         #x_       = numpy.vstack(x_)
         deriv    = numpy.ones(len_x)
         deriv[i] = 0
         deriv_   = np.zeros(len_x)
         deriv_[i]= 1
-        e        = np.vstack(np.repeat(elem_, len_x))
+        e        = np.asarray([elem_ for ii in range(len_x)])
         y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('i,i...->i...',deriv_,e)
         return dict(y_=y_)
 
