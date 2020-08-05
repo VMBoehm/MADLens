@@ -18,48 +18,6 @@ import resource
 
 
 
-@operator
-class simple_einsum:
-    ain  = 'x'
-    aout = 'y'
-    def apl(node, subscripts, x, b):
-        x = x.append(b)
-        operands = []
-        operands.append(subscripts)
-        operands.extend(x)
-        # we use the internal einsum function to parse subscripts to a normal form.
-        sub_op, sub_y, operands = _parse_einsum_input(operands)
-        sub_op = sub_op.split(',')
-        return dict(y=numpy.einsum(_join_einsum_sub(sub_op, sub_y), *x), sub_op=sub_op, sub_y=sub_y, x=x)
-
-    def vjp(node, x, _y, sub_op, sub_y, b):
-        _x = []
-        x = x.append(b)
-        for i, arg in enumerate(x):
-            # Jacobian is removing the item from the chain. 
-            # vjp is replace the item with _y.
-            a = list(sub_op)[:]
-            x1 = list(x)[:]
-            new_sub_y = a[i]
-            a[i] = sub_y
-            x1[i] = _y
-            _x.append(numpy.einsum(_join_einsum_sub(a, new_sub_y), *x1))
-
-        return _x
-
-    def jvp(node, x, x_, sub_op, sub_y, b):
-        y_ = []
-        x  = x.append(b)
-        for i, arg in enumerate(x):
-            # Jacobian is removing the item from the chain. 
-            # jvp is replace the item with x_
-            x1 = list(x)[:]
-            x1[i] = x_[i]
-            y_.append(numpy.einsum(_join_einsum_sub(sub_op, sub_y), *x1))
-
-        # sum of all branches
-        return numpy.sum(y_, axis=0)
-
 def BinarySearch_Left(mylist, items):
     print(mylist, items)
     "finds where to insert elements into a sorted array, this is the equivalent of numpy.searchsorted"
@@ -141,8 +99,10 @@ class list_put:
         deriv[i] = 0
         deriv_   = np.zeros(len_x)
         deriv_[i]= 1
+        elem_    = np.asarray(elem_)
         e        = np.asarray([elem_ for ii in range(len_x)])
         y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('i,i...->i...',deriv_,e)
+        y_       = mod_list(y_)
         return dict(y_=y_)
 
 @operator
