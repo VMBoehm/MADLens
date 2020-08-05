@@ -34,12 +34,6 @@ class Test_list_put_3d(BaseVectorTest):
         return res
 
 
-
-
-
-
-
-
 class Test_list_put_2d(BaseVectorTest):
     elems = np.ones((5,2))*2
     i     = 2
@@ -67,41 +61,29 @@ class Test_chi_z(BaseVectorTest):
         return res
 
 def get_stuff():
-    params_file='/home/nessa/Documents/codes/MADLens/runs/88b093c/deriv_run0.json'
-    with open(params_file, 'r') as f:
-        params = json.load(f)
 
-    pm        = fastpm.ParticleMesh(Nmesh=params['Nmesh'], BoxSize=params['BoxSize'],comm=MPI.COMM_WORLD, resampler='cic')
-    BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
+    pm        = fastpm.ParticleMesh(Nmesh=[4,4,4], BoxSize=[256,256,256],comm=MPI.COMM_WORLD, resampler='cic')
 
     # generate initial conditions
     cosmo     = Planck15.clone(P_k_max=30)
-    rho       = pm.generate_whitenoise(seed=783645, unitary=False, type='complex')
-    rho       = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
-    #set zero mode to zero
-    rho.csetitem([0, 0, 0], 0)
+    x         = pm.generate_uniform_particle_grid(shift=0.5)
+    x         = np.arange(3*100).reshape((100,3))
+    M         = np.asarray([[1,0,0],[0,0,1],[0,1,0]]) 
+    y         = np.einsum('ij,kj->ki', M, x)
 
-    wlsim     = lightcone.WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
-    x         = wlsim.q 
-    a_ini     = 0.98
-    a_fin     = 1.
-    d_ini,d_fin = cosmo.comoving_distance(1./np.array([a_ini,a_fin])-1.)
-    Ms        = wlsim.imgen.generate(d_ini,d_fin)
-    M         = Ms[0]
-    y         = np.einsum('ij,kj->ki', (M, x))
-    d         = y[:,2]
-    xy        = y[:,:2] 
-
-    return x,y,M,wlsim
+    return x,y
    
 
-#class Test_rotate(BaseVectorTest):
-#    
-#    x, y, M, wlsim = get_stuff()
-#
-#    def model(self,x):
-#        res = self.wlsim.rotate(x,self.M, [0.,0.,0.])
-#        return res
+class Test_rotate(BaseVectorTest):
+    
+    x = np.arange(3*100).reshape((100,3))                                     
+    M = np.ones((3,3))                        
+    y = np.einsum('ij,kj->ki', M, x)   
+
+    def model(self,x):
+        M = np.ones((3,3))
+        y = linalg.einsum('ij, kj->ki', [M,x])     
+        return y
 
 
 
