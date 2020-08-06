@@ -259,7 +259,7 @@ class WLSimulation(FastPMSimulation):
         self.max_ds  = max(self.ds)
         
         # redshift as a function of comsoving distance for underlying cosmology
-        z_int          = np.logspace(-8,np.log10(1500),10000)
+        z_int          = np.logspace(-12,np.log10(1500),40000)
         chis           = cosmology.comoving_distance(z_int) #Mpc/h
         self.z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind=3,bounds_error=False, fill_value=0.)
 
@@ -307,11 +307,10 @@ class WLSimulation(FastPMSimulation):
         d:   particle distance (assuming parllel projection)
         ds:  source redshift
         """
-        cosmo      = self.cosmo
-        z          = z_chi(d,cosmo,self.z_chi_int)
-        columndens = self.nbar*self.A*(d)**2 #particles/Volume*angular pixel area* distance^2 -> 1/L units
-        kernel     = (ds-d)*d/ds*(1.+z)/columndens #distance
-        return kernel
+        z          = z_chi(d,self.cosmo,self.z_chi_int)
+        columndens = self.nbar*self.A*linalg.pow(d,2) #particles/Volume*angular pixel area* distance^2 -> 1/L units
+        w          = (ds-d)#*d/ds*(1.+z)/columndens #distance
+        return w
 
     @autooperator('xy,w ->map')
     def makemap(self, xy, w):

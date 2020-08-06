@@ -8,6 +8,8 @@ import vmad.lib.linalg as linalg
 from mpi4py import MPI
 import json
 import numpy
+import os
+import scipy
 
 class Test_list_elem(BaseVectorTest):
     i = 1
@@ -60,18 +62,38 @@ class Test_chi_z(BaseVectorTest):
         res = lightcone.chi_z(x,self.cosmo)
         return res
 
-def get_stuff():
 
-    pm        = fastpm.ParticleMesh(Nmesh=[4,4,4], BoxSize=[256,256,256],comm=MPI.COMM_WORLD, resampler='cic')
+def get_params():
+    params={}
+    params['Nmesh'] = [4,4,4]
+    params['BoxSize'] = [4,4,4]
+    params['N_maps'] = 1
+    params['Nmesh2D'] = [8,8]
+    params['BoxSize2D']=[6.37616/2.]*2
+    params['N_steps']=11
+    params['custom_cosmo']=False
+    params['Omega_m']=0.3089
+    params['sigma_8']=0.8158
+    params['PGD']=True
+    params['B']=2
+    params['zs_source']=['0.02']
+    params['interpolate']=True
+    params['debug']=True
+    params['save3D']=False
+    params['save3Dpower']= False
+    params['PGD_path']=os.path.join('/home/nessa/Documents/codes/MADLens/','pgd_params/')
+    return params
 
+def set_up():
+    params    = get_params()
+    pm        = fastpm.ParticleMesh(Nmesh=params['Nmesh'], BoxSize=params['BoxSize'],comm=MPI.COMM_WORLD, resampler='cic')
     # generate initial conditions
     cosmo     = Planck15.clone(P_k_max=30)
-    x         = pm.generate_uniform_particle_grid(shift=0.5)
-    x         = np.arange(3*100).reshape((100,3))
-    M         = np.asarray([[1,0,0],[0,0,1],[0,1,0]]) 
-    y         = np.einsum('ij,kj->ki', M, x)
+    x         = pm.generate_uniform_particle_grid(shift=0.1)
+    BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
+    sim       = lightcone.WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
 
-    return x,y
+    return pm, cosmo, x, sim
    
 
 class Test_rotate(BaseVectorTest):
@@ -85,8 +107,45 @@ class Test_rotate(BaseVectorTest):
         y = linalg.einsum('ij, kj->ki', [M,x])     
         return y
 
+class Test_rotate2(BaseVectorTest):
+
+    pm, _, x, _ = set_up()
+    boxshift  = 0.5    
+    M         = np.asarray([[1,0,0],[0,0,1],[0,1,0]]) 
+    y         = np.einsum('ij,kj->ki', M, x)+pm.BoxSize*boxshift
+    
+    #y = y[:,2]
+    y = y[:,0:2]
+
+    def model(self, x):
+        y  = linalg.einsum('ij,kj->ki', (self.M, x))     
+        y  = y + self.pm.BoxSize * self.boxshift
+        d  = linalg.take(y, 2, axis=1)
+        xy = linalg.take(y, (0, 1), axis=1)
+        return xy#d
+
+class Test_wlen(BaseVectorTest):
+    pm, cosmo, x, sim = set_up()
+    x               = x[:,2]
+    z               = sim.z_chi_int(x)
+    ds              = sim.ds[0]
+    columndens      = sim.nbar*sim.A*x**2 #particles/Volume*angular pixel area* distance^2 -> 1/L units
+    y              = (ds-x)#*x/ds*(1.+z)/columndens #distance
+    def model(self,x):
+        res = self.sim.wlen(x,self.ds)
+        return res
 
 
+class Test_z_chi(BaseVectorTest):
 
+    x              = np.linspace(100,1000)
+    z_int          = np.logspace(-8,np.log10(1500),10000)
+    chis           = Planck15.comoving_distance(z_int) #Mpc/h
+    z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind=3,bounds_error=False, fill_value=0.)
+    y              = z_chi_int(x)
 
+    def model(self,x):
+        y = lightcone.z_chi(x,Planck15,self.z_chi_int)
+        return y
+ 
 
