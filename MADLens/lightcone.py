@@ -309,7 +309,7 @@ class WLSimulation(FastPMSimulation):
         """
         z          = z_chi(d,self.cosmo,self.z_chi_int)
         columndens = self.nbar*self.A*linalg.pow(d,2) #particles/Volume*angular pixel area* distance^2 -> 1/L units
-        w          = (ds-d)#*d/ds*(1.+z)/columndens #distance
+        w          = (ds-d)*d/ds*(1.+z)/columndens #distance
         return w
 
     @autooperator('xy,w ->map')

@@ -130,7 +130,7 @@ class Test_wlen(BaseVectorTest):
     z               = sim.z_chi_int(x)
     ds              = sim.ds[0]
     columndens      = sim.nbar*sim.A*x**2 #particles/Volume*angular pixel area* distance^2 -> 1/L units
-    y              = (ds-x)#*x/ds*(1.+z)/columndens #distance
+    y               = (ds-x)*x/ds*(1.+z)/columndens #distance
     def model(self,x):
         res = self.sim.wlen(x,self.ds)
         return res
