@@ -1,15 +1,32 @@
 import numpy as np
-from MADLens.testing import BaseVectorTest
+from MADLens.testing import BaseVectorTest, BaseScalarTest
 from nbodykit.cosmology import Planck15
 from MADLens import lightcone
-from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
-import vmad.lib.fastpm as fastpm
+from vmad.lib.fastpm import FastPMSimulation as vmadPMSimulation
+from vmad.lib.fastpm import ParticleMesh as vmadParticleMesh
+import vmad.lib.fastpm as vmadfastpm
+from pmesh.pm import ParticleMesh
+import fastpm 
 import vmad.lib.linalg as linalg
 from mpi4py import MPI
 import json
 import numpy
 import os
 import scipy
+from pmesh.pm import RealField, ComplexField
+
+def create_bases(x):
+    bases = numpy.eye(x.size).reshape([-1] + list(x.shape))
+    if isinstance(x, RealField):
+        pm = x.pm
+        # FIXME: remove this after pmesh 0.1.36
+        def create_field(pm, data):
+            real = pm.create(type='real')
+            real[...] = data
+            return real
+        return [create_field(pm, i) for i in bases]
+    else:
+        return [i for i in bases]
 
 class Test_list_elem(BaseVectorTest):
     i = 1
@@ -86,7 +103,7 @@ def get_params():
 
 def set_up():
     params    = get_params()
-    pm        = fastpm.ParticleMesh(Nmesh=params['Nmesh'], BoxSize=params['BoxSize'],comm=MPI.COMM_WORLD, resampler='cic')
+    pm        = ParticleMesh(Nmesh=params['Nmesh'], BoxSize=params['BoxSize'],comm=MPI.COMM_WORLD, resampler='cic')
     # generate initial conditions
     cosmo     = Planck15.clone(P_k_max=30)
     x         = pm.generate_uniform_particle_grid(shift=0.1)
@@ -149,3 +166,26 @@ class Test_z_chi(BaseVectorTest):
         return y
  
 
+class Test_makemap(BaseScalarTest):
+    
+    to_scalar = staticmethod(linalg.to_scalar)
+
+    pm = ParticleMesh(Nmesh=[4, 4], BoxSize=8.0, comm=MPI.COMM_SELF)
+    x  = pm.generate_uniform_particle_grid(shift=0.)  
+    xx = pm.generate_whitenoise(seed=300, unitary=True, type='real')
+    y  = NotImplemented
+    w  = np.ones(4)
+    x_ = create_bases(x)
+
+    def model(self, x):
+            
+        compensation = self.pm.resampler.get_compensation()
+        
+        layout       = vmadfastpm.decompose(x, self.pm)
+        map          = vmadfastpm.paint(x, self.w, layout, self.pm)
+        # compensation for cic window
+        c            = vmadfastpm.r2c(map)
+        c            = vmadfastpm.apply_transfer(c, lambda k : compensation(k, 1.0), kind='circular')
+        map          = vmadfastpm.c2r(c)
+         
+        return map 
