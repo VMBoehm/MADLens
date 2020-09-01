@@ -168,14 +168,18 @@ class Test_z_chi(BaseVectorTest):
 
 class Test_makemap(BaseScalarTest):
     
-    to_scalar = staticmethod(linalg.to_scalar)
+    to_scalar = staticmethod(vmadfastpm.to_scalar)
 
     pm = ParticleMesh(Nmesh=[4, 4], BoxSize=8.0, comm=MPI.COMM_SELF)
-    x  = pm.generate_uniform_particle_grid(shift=0.)  
+    #x  = pm.generate_uniform_particle_grid(shift=0.5)
+    #x  = x[:1,:]
+    x  = np.array([[3.,3.]],dtype=np.float64) # particle cannot be on grid point
     xx = pm.generate_whitenoise(seed=300, unitary=True, type='real')
     y  = NotImplemented
-    w  = np.ones(4)
+    w  = np.ones(len(x))
     x_ = create_bases(x)
+
+    epsilon = 1e-3
 
     def model(self, x):
             
@@ -183,9 +187,10 @@ class Test_makemap(BaseScalarTest):
         
         layout       = vmadfastpm.decompose(x, self.pm)
         map          = vmadfastpm.paint(x, self.w, layout, self.pm)
+        y            = map+self.xx # bias needed to avoid zero derivative
         # compensation for cic window
-        c            = vmadfastpm.r2c(map)
+        c            = vmadfastpm.r2c(y)
         c            = vmadfastpm.apply_transfer(c, lambda k : compensation(k, 1.0), kind='circular')
         map          = vmadfastpm.c2r(c)
          
-        return map 
+        return map
