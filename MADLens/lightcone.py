@@ -335,27 +335,7 @@ class WLSimulation(FastPMSimulation):
         
         return map
 
-    @autooperator('af->drift')
-    def mod_DriftFactor(self,af,ai,ac,pt):
-        drift = 1 / (ac ** 3 * pt.E(ac)) * (self.mod_Gp(af,0) - pt.Gp(ai)) / pt.gp(ac)
-        return drift
-    
-    @autooperator('a->D1')
-    def mod_Gp(self, a, order):
-        lna = linalg.log(a)
-        y   = self.pt._D1[:,order]
-        x   = self.pt.lna
-        indices = stdlib.eval(lna, lambda lna, x = x: BinarySearch_Left(x, lna))
-        
-        y = np.append(y, y[-1])
-        y = np.append(y, y[0])
-        x = np.append(x, x[-1]+1)
-        factors = (y[indices]-y[indices-1])/(x[indices]-x[indices-1])
-        D1      = y[indices-1]+factors*(lna-x[indices-1])
-        return D1
-
-    # can we remove p here?
-    @autooperator('dx, p, kmaps, dx_PGD->kmaps')
+    @autooperator('dx,p, kmaps, dx_PGD->kmaps')
     def interp(self, dx, p, kmaps, dx_PGD, ax, ap, ai, af):
 
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
@@ -391,6 +371,37 @@ class WLSimulation(FastPMSimulation):
                     kmaps    = list_put(kmaps,kmap,ii)
          
         return kmaps
+
+    @autooperator('dx,p, kmaps, dx_PGD->kmaps'):
+    def no_interp(dx,p,kmaps,dx_PGD,ai,af):
+
+        dx = dx + dx_PGD
+
+
+        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+
+        for M in self.imgen.generate(di, df):
+                # if lower end of box further away than source -> do nothing
+            if df>self.max_ds:
+                continue
+            else:
+                M, boxshift = M
+                xy, d    = self.rotate((dx + q)%self.pm.BoxSize, M, boxshift)
+                d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=q))
+            
+                xy       = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
+
+                for ii, ds in enumerate(self.ds):
+                    w        = self.wlen(d,ds)
+                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    kmap_    = self.makemap(xy, w*mask)*self.factor   
+                    kmap     = list_elem(kmaps,ii)
+                    kmap     = linalg.add(kmap_,kmap)
+                    kmaps    = list_put(kmaps,kmap,ii)
+
+        return kmaps
+            
+
 
 
     @autooperator('rhok->kmaps')
@@ -454,9 +465,12 @@ class WLSimulation(FastPMSimulation):
         
         return dict(kmaps=kmaps)
 
+
+    
+
     @autooperator('rhok->kmaps')
     def run(self, rhok):
-        import resource
+        
         def getrss():
             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
@@ -477,8 +491,6 @@ class WLSimulation(FastPMSimulation):
         ii = 0 
         for ai, af in zip(stages[:-1], stages[1:]):
             
-            di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
-
             
             # central scale factor
             ac = (ai * af) ** 0.5
@@ -496,33 +508,15 @@ class WLSimulation(FastPMSimulation):
                 dx_      = PGD.PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
             else:
                 dx_      = 0.
-
-            dx_out   = dx+dx_
-
-            for M in self.imgen.generate(di, df):
-                # if lower end of box further away than source -> do nothing
-                if df>self.max_ds:
-                    continue
-                else:
-                    M, boxshift = M
-                    xy, d    = self.rotate((dx_out + q)%self.pm.BoxSize, M, boxshift)
-                    d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=q))
             
-                    xy       = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
-
-                    for ii, ds in enumerate(self.ds):
-                        w        = self.wlen(d,ds)
-                        mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                        kmap_    = self.makemap(xy, w*mask)*self.factor   
-                        kmap     = list_elem(kmaps,ii)
-                        kmap     = linalg.add(kmap_,kmap)
-                        kmaps    = list_put(kmaps,kmap,ii)
             
             if self.params['save3D'] or self.params['save3Dpower']:
                 zf       = 1./af-1.
                 zi       = 1./ai-1.
-                pos      = (dx_out + q)
+                pos      = (dx+dx_+q)
                 stdlib.watchpoint(pos,lambda pos, ii=ii,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params))
+
+            kmaps = self.no_interp(dx, p, kmaps, dx_PGD, ai, af)
 
             # force (compute force)
             f, potk = self.gravity(dx)

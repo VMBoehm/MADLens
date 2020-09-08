@@ -14,6 +14,7 @@ import numpy
 import os
 import scipy
 from pmesh.pm import RealField, ComplexField
+from vmad.core import stdlib
 
 def create_bases(x):
     bases = numpy.eye(x.size).reshape([-1] + list(x.shape))
@@ -83,7 +84,7 @@ class Test_chi_z(BaseVectorTest):
 def get_params():
     params={}
     params['Nmesh'] = [4,4,4]
-    params['BoxSize'] = [4,4,4]
+    params['BoxSize'] = [64,64,64]
     params['N_maps'] = 1
     params['Nmesh2D'] = [8,8]
     params['BoxSize2D']=[6.37616/2.]*2
@@ -91,9 +92,9 @@ def get_params():
     params['custom_cosmo']=False
     params['Omega_m']=0.3089
     params['sigma_8']=0.8158
-    params['PGD']=True
+    params['PGD']=False
     params['B']=2
-    params['zs_source']=['0.02']
+    params['zs_source']=['0.2']
     params['interpolate']=True
     params['debug']=True
     params['save3D']=False
@@ -109,8 +110,9 @@ def set_up():
     x         = pm.generate_uniform_particle_grid(shift=0.1)
     BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
     sim       = lightcone.WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
+    kmaps = [sim.mappm.create('real', value=0.) for ii in range(1)]
 
-    return pm, cosmo, x, sim
+    return pm, cosmo, x, kmaps, sim.DriftFactor, sim.mappm, sim
    
 
 class Test_rotate(BaseVectorTest):
@@ -126,7 +128,7 @@ class Test_rotate(BaseVectorTest):
 
 class Test_rotate2(BaseVectorTest):
 
-    pm, _, x, _ = set_up()
+    pm, _, x, _, _, _, _ = set_up()
     boxshift  = 0.5    
     M         = np.asarray([[1,0,0],[0,0,1],[0,1,0]]) 
     y         = np.einsum('ij,kj->ki', M, x)+pm.BoxSize*boxshift
@@ -142,7 +144,7 @@ class Test_rotate2(BaseVectorTest):
         return xy#d
 
 class Test_wlen(BaseVectorTest):
-    pm, cosmo, x, sim = set_up()
+    pm, cosmo, x, _, _, _, sim = set_up()
     x               = x[:,2]
     z               = sim.z_chi_int(x)
     ds              = sim.ds[0]
@@ -166,7 +168,7 @@ class Test_z_chi(BaseVectorTest):
         return y
  
 
-class Test_makemap(BaseScalarTest):
+class Test_makemap1(BaseScalarTest):
     
     to_scalar = staticmethod(vmadfastpm.to_scalar)
 
@@ -184,7 +186,6 @@ class Test_makemap(BaseScalarTest):
     def model(self, x):
             
         compensation = self.pm.resampler.get_compensation()
-        
         layout       = vmadfastpm.decompose(x, self.pm)
         map          = vmadfastpm.paint(x, self.w, layout, self.pm)
         y            = map+self.xx # bias needed to avoid zero derivative
@@ -194,3 +195,87 @@ class Test_makemap(BaseScalarTest):
         map          = vmadfastpm.c2r(c)
          
         return map
+
+class Test_makemap2(BaseScalarTest):
+    
+    to_scalar = staticmethod(vmadfastpm.to_scalar)
+
+    pm = ParticleMesh(Nmesh=[4, 4], BoxSize=8.0, comm=MPI.COMM_SELF)
+    #x  = pm.generate_uniform_particle_grid(shift=0.5)
+    #x  = x[:1,:]
+    w  = np.array([[3.,3.]],dtype=np.float64) # particle cannot be on grid point
+    xx = pm.generate_whitenoise(seed=300, unitary=True, type='real')
+    y  = NotImplemented
+    x  = np.ones(len(w))
+    x_ = create_bases(x)
+
+    epsilon = 1e-3
+
+    def model(self, x):
+            
+        compensation = self.pm.resampler.get_compensation()
+        layout       = vmadfastpm.decompose(self.w, self.pm)
+        map          = vmadfastpm.paint(self.w, x, layout, self.pm)
+        y            = map+self.xx # bias needed to avoid zero derivative
+        # compensation for cic window
+        c            = vmadfastpm.r2c(y)
+        c            = vmadfastpm.apply_transfer(c, lambda k : compensation(k, 1.0), kind='circular')
+        map          = vmadfastpm.c2r(c)
+         
+        return map
+
+
+class Test_interp(BaseScalarTest):
+
+    to_scalar = staticmethod(vmadfastpm.to_scalar)
+    
+    pm, cosmo, q, kmaps, DriftFactor, mappm ,sim = set_up()
+    y  = NotImplemented
+    ai = np.asarray([0.5])
+    af = np.asarray([1.0])
+    ac = (ai * af) ** 0.5
+    p  = np.asarray([0.01,0.05,0.02])
+    dx_PGD = 0.
+    x  = np.asarray([[0.5,3.0,1.2]])
+    xx = mappm.generate_whitenoise(seed=300, unitary=True, type='real')
+    x_ = create_bases(x)
+    epsilon = 1e-3
+
+    def model(self, x):
+        di, df = self.cosmo.comoving_distance(1. / numpy.array([self.ai, self.af]) - 1.)
+        for M in self.sim.imgen.generate(di, df):
+            # if lower end of box further away than source -> do nothing
+            if df>self.sim.max_ds:
+                continue
+            else:
+                M, boxshift = M
+
+                # positions of unevolved particles after rotation
+                d_approx = self.sim.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
+                z_approx = lightcone.z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.sim.z_chi_int,chi=d_approx)['z']
+                a_approx = 1. / (z_approx + 1.)
+                
+                # move particles to a_approx, then add PGD correction
+                
+                dx1      = x + self.p*self.DriftFactor(a_approx, self.ac, self.ac)[:, None] + self.dx_PGD
+                # rotate their positions
+                xy, d    = self.sim.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
+
+                # projection
+                xy       = (((xy - self.pm.BoxSize[:2]* 0.5))/ linalg.stack((d,d), axis=-1)+ self.sim.mappm.BoxSize * 0.5 )
+
+                for ii, ds in enumerate(self.sim.ds):
+                    w        = self.sim.wlen(d,ds)
+                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    #stdlib.watchpoint(mask, lambda f: print(f))
+                    kmap     = lightcone.list_elem(self.kmaps,ii)
+                    kmap_    = self.sim.makemap(xy, w*mask)#+self.xx
+                    kmap     = linalg.add(kmap_,kmap)
+                    self.kmaps = lightcone.list_put(self.kmaps,kmap,ii)
+        #stdlib.watchpoint(mask, lambda f: print(f)) 
+        #stdlib.watchpoint(d, lambda d, d_approx=d_approx, di=di, df=df, ds=ds: print(d_approx,di,df,ds))  
+        kmap_ = lightcone.list_elem(self.kmaps,0)
+        #stdlib.watchpoint(kmap_, lambda f: print(f)) 
+        return kmap_#lightcone.list_elem(self.kmaps,0)
+
+
