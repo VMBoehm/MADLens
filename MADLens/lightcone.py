@@ -372,8 +372,8 @@ class WLSimulation(FastPMSimulation):
          
         return kmaps
 
-    @autooperator('dx,p, kmaps, dx_PGD->kmaps'):
-    def no_interp(dx,p,kmaps,dx_PGD,ai,af):
+    @autooperator('dx,p, kmaps, dx_PGD->kmaps')
+    def no_interp(self,dx,p,kmaps,dx_PGD,ai,af):
 
         dx = dx + dx_PGD
 
@@ -386,8 +386,8 @@ class WLSimulation(FastPMSimulation):
                 continue
             else:
                 M, boxshift = M
-                xy, d    = self.rotate((dx + q)%self.pm.BoxSize, M, boxshift)
-                d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=q))
+                xy, d    = self.rotate((dx + self.q)%self.pm.BoxSize, M, boxshift)
+                d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
                 xy       = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
 
@@ -407,12 +407,6 @@ class WLSimulation(FastPMSimulation):
     @autooperator('rhok->kmaps')
     def run_interpolated(self, rhok):
 
-        def getrss():
-            usage = resource.getrusage(resource.RUSAGE_SELF)
-            names=('ru_utime','ru_stime','ru_maxrss','ru_ixrss','ru_idrss') 
-            descs=('User time','System time','Max. Resident Set Size','Shared Memory Size','Unshared Memory Size')
-            return usage, descs, names
-
         dx, p  = self.firststep(rhok)
         pt     = self.pt
         stages = self.stages
@@ -427,12 +421,6 @@ class WLSimulation(FastPMSimulation):
         for ai, af in zip(stages[:-1], stages[1:]):
             # central scale factor
             ac = (ai * af) ** 0.5
-
-            if self.params['analyze']:
-                if self.pm.comm.rank == 0:
-                    usage, descs, names = getrss()
-                    for ii in range(len(descs)):
-                        stdlib.watchpoint(f, lambda f, ai=ai: print('ai', ai, '%-25s (%-10s) = %s'%(descs[ii], names[ii], getattr(usage, names[ii]))))
 
             # kick
             dp = f * (self.KickFactor(ai, ai, ac) * 1.5 * Om0)
@@ -471,27 +459,18 @@ class WLSimulation(FastPMSimulation):
     @autooperator('rhok->kmaps')
     def run(self, rhok):
         
-        def getrss():
-            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-
         dx, p  = self.firststep(rhok)
-
         pt     = self.pt
-
         stages = self.stages
         q      = self.q
-
         Om0    = pt.Om0
 
         powers =[]
         kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
         
         f, potk= self.gravity(dx)
-
-        ii = 0 
+        jj = 0 #counting steps for saving snapshots
         for ai, af in zip(stages[:-1], stages[1:]):
-            
-            
             # central scale factor
             ac = (ai * af) ** 0.5
 
@@ -505,16 +484,17 @@ class WLSimulation(FastPMSimulation):
 
             if self.params['PGD']:
                 alpha    = self.alpha0*af**self.mu
-                dx_      = PGD.PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
+                dx_PGD   = PGD.PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
             else:
-                dx_      = 0.
+                dx_PGD   = 0.
             
-            
+             
             if self.params['save3D'] or self.params['save3Dpower']:
                 zf       = 1./af-1.
                 zi       = 1./ai-1.
                 pos      = (dx+dx_+q)
-                stdlib.watchpoint(pos,lambda pos, ii=ii,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params))
+                stdlib.watchpoint(pos,lambda pos, ii=jj,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params))
+                jj+=1
 
             kmaps = self.no_interp(dx, p, kmaps, dx_PGD, ai, af)
 
@@ -525,7 +505,6 @@ class WLSimulation(FastPMSimulation):
             dp = f * (self.KickFactor(ac, af, af) * 1.5 * Om0)
             p  = p + dp
 
-            ii+=1
 
         return kmaps
 

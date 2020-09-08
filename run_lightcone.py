@@ -31,7 +31,7 @@ flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bo
 flags.DEFINE_boolean('PGD',True,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
 flags.DEFINE_spaceseplist('zs_source',['0.1'],'source redshifts')
-flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
+flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
 flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
