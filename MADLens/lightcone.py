@@ -15,8 +15,8 @@ import pickle
 import os
 import errno
 import resource
-
-
+import logging
+import sys
 
 def BinarySearch_Left(mylist, items):
     print(mylist, items)
@@ -240,7 +240,7 @@ class ImageGenerator:
     
     
 class WLSimulation(FastPMSimulation):
-    def __init__(self, stages, cosmology, pm, params, boxsize2D):
+    def __init__(self, stages, cosmology, pm, params, boxsize2D, logger):
         """
         stages:    1d array of floats. scale factors at which to evaluate fastpm simulation (fastpm steps)
         cosmology: nbodykit cosmology object
@@ -248,6 +248,7 @@ class WLSimulation(FastPMSimulation):
         params:    dictionary, parameters for this run
         boxsize2D: list, fov in radians
         """
+        self.logger = logger
 
         q = pm.generate_uniform_particle_grid(shift=0.)        
         FastPMSimulation.__init__(self, stages, cosmology, pm, params['B'], q)
@@ -360,7 +361,7 @@ class WLSimulation(FastPMSimulation):
                 xy, d    = self.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
 
                 # projection
-                xy       = (((xy - self.pm.BoxSize[:2]* 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
+                xy       = (((xy - self.pm.BoxSize[:2]* 0.5))/linalg.broadcast_to(d,[np.prod(self.pm.Nemsh),1])+ self.mappm.BoxSize * 0.5 )
                     
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
@@ -373,25 +374,28 @@ class WLSimulation(FastPMSimulation):
         return kmaps
 
     @autooperator('dx,p, kmaps, dx_PGD->kmaps')
-    def no_interp(self,dx,p,kmaps,dx_PGD,ai,af):
-
+    def no_interp(self,dx,p,kmaps,dx_PGD,ai,af,jj):
+        
         dx = dx + dx_PGD
 
-
+        
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
             if df>self.max_ds:
+                self.logger.info('imgen passed, %d'%jj)
                 continue
             else:
+                self.logger.info('imgen with projection, %d'%jj)
                 M, boxshift = M
                 xy, d    = self.rotate((dx + self.q)%self.pm.BoxSize, M, boxshift)
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
-                xy       = (((xy - self.pm.BoxSize[:2] * 0.5))/ linalg.stack((d,d), axis=-1)+ self.mappm.BoxSize * 0.5 )
+                xy       = (((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(d,[np.prod(self.pm.Nmesh),1]))+self.mappm.BoxSize * 0.5 )
 
                 for ii, ds in enumerate(self.ds):
+                    self.logger.info('projection, %d'%jj)
                     w        = self.wlen(d,ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor   
@@ -471,6 +475,8 @@ class WLSimulation(FastPMSimulation):
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
         for ai, af in zip(stages[:-1], stages[1:]):
+            
+            self.logger.info('fastpm step, %d'%jj)
             # central scale factor
             ac = (ai * af) ** 0.5
 
@@ -494,9 +500,9 @@ class WLSimulation(FastPMSimulation):
                 zi       = 1./ai-1.
                 pos      = (dx+dx_+q)
                 stdlib.watchpoint(pos,lambda pos, ii=jj,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params))
-                jj+=1
+            jj+=1
 
-            kmaps = self.no_interp(dx, p, kmaps, dx_PGD, ai, af)
+            kmaps = self.no_interp(dx, p, kmaps, dx_PGD, ai, af, jj)
 
             # force (compute force)
             f, potk = self.gravity(dx)
@@ -517,6 +523,22 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     label:   string, label of this run. used in filename if 3D matter distribution is saved
     randseed:random seed for generating initial conditions
     '''
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    
+    a_logger = logging.getLogger()
+
+    lformat = logging.Formatter('%(asctime)s - %(message)s')
+
+
+    output_file_handler = logging.FileHandler("proc%d.log"%rank)
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    output_file_handler.setFormatter(lformat)
+
+    a_logger.addHandler(output_file_handler)
+    a_logger.addHandler(stdout_handler)
+
+
 
     # particle mesh for fastpm simulation
     pm        = fastpm.ParticleMesh(Nmesh=params['Nmesh'], BoxSize=params['BoxSize'], comm=MPI.COMM_WORLD, resampler='cic')
@@ -533,9 +555,9 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     rho       = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
-
+    logging.info('simulations starts')
     # weak lensing simulation object
-    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
+    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, logger=a_logger)
 
     #build
     if params['interpolate']:
