@@ -99,6 +99,7 @@ def get_params():
     params['debug']=True
     params['save3D']=False
     params['save3Dpower']= False
+    params['logging']=False
     params['PGD_path']=os.path.join('/home/nessa/Documents/codes/MADLens/','pgd_params/')
     return params
 
@@ -109,7 +110,8 @@ def set_up():
     cosmo     = Planck15.clone(P_k_max=30)
     x         = pm.generate_uniform_particle_grid(shift=0.1)
     BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
-    sim       = lightcone.WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params)
+    logger    = None
+    sim       = lightcone.WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, logger=None)
     kmaps = [sim.mappm.create('real', value=0.) for ii in range(1)]
 
     return pm, cosmo, x, kmaps, sim.DriftFactor, sim.mappm, sim
@@ -243,39 +245,46 @@ class Test_interp(BaseScalarTest):
 
     def model(self, x):
         di, df = self.cosmo.comoving_distance(1. / numpy.array([self.ai, self.af]) - 1.)
+        kmap = lightcone.list_elem(self.kmaps,0)
         for M in self.sim.imgen.generate(di, df):
-            # if lower end of box further away than source -> do nothing
+            #if lower end of box further away than source -> do nothing
             if df>self.sim.max_ds:
                 continue
             else:
                 M, boxshift = M
 
-                # positions of unevolved particles after rotation
+                #positions of unevolved particles after rotation
                 d_approx = self.sim.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
                 z_approx = lightcone.z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.sim.z_chi_int,chi=d_approx)['z']
                 a_approx = 1. / (z_approx + 1.)
                 
-                # move particles to a_approx, then add PGD correction
+                #move particles to a_approx, then add PGD correction
                 
                 dx1      = x + self.p*self.DriftFactor(a_approx, self.ac, self.ac)[:, None] + self.dx_PGD
-                # rotate their positions
+                #rotate their positions
                 xy, d    = self.sim.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
 
-                # projection
-                xy       = (((xy - self.pm.BoxSize[:2]* 0.5))/ linalg.stack((d,d), axis=-1)+ self.sim.mappm.BoxSize * 0.5 )
+                #projection
+                xy       = (xy - self.pm.BoxSize[:2]* 0.5)/linalg.broadcast_to(linalg.reshape(d, (np.prod(self.pm.Nmesh),1)), (np.prod(self.pm.Nmesh), 2))+ self.sim.mappm.BoxSize * 0.5 
 
                 for ii, ds in enumerate(self.sim.ds):
                     w        = self.sim.wlen(d,ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                    #stdlib.watchpoint(mask, lambda f: print(f))
-                    kmap     = lightcone.list_elem(self.kmaps,ii)
-                    kmap_    = self.sim.makemap(xy, w*mask)#+self.xx
+                    #kmap     = lightcone.list_elem(self.kmaps,ii)
+                    kmap_    = self.sim.makemap(xy, w*mask)
                     kmap     = linalg.add(kmap_,kmap)
-                    self.kmaps = lightcone.list_put(self.kmaps,kmap,ii)
-        #stdlib.watchpoint(mask, lambda f: print(f)) 
-        #stdlib.watchpoint(d, lambda d, d_approx=d_approx, di=di, df=df, ds=ds: print(d_approx,di,df,ds))  
-        kmap_ = lightcone.list_elem(self.kmaps,0)
-        #stdlib.watchpoint(kmap_, lambda f: print(f)) 
-        return kmap_#lightcone.list_elem(self.kmaps,0)
+                    #self.kmaps = lightcone.list_put(self.kmaps,kmap,ii)
+        #kmap_ = RealField(lightcone.list_elem(self.kmaps,0))
+        return kmap
 
+
+class Test_reshape(BaseVectorTest):
+     
+     x = np.arange(5)
+     a = np.ones((5,2))
+     y = a*np.reshape(x,(5,1))
+
+     def model(self,x):
+        result = self.a*linalg.broadcast_to(linalg.reshape(x,(5,1)),(5,2))
+        return result
 
