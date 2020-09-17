@@ -361,7 +361,7 @@ class WLSimulation(FastPMSimulation):
                 xy, d    = self.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
 
                 # projection
-                xy       = (((xy - self.pm.BoxSize[:2]* 0.5))/linalg.broadcast_to(d,[np.prod(self.pm.Nemsh),1])+ self.mappm.BoxSize * 0.5 )
+                xy       = ((xy - self.pm.BoxSize[:2]* 0.5)/linalg.broadcast_to(linalg.reshape(d, (np.prod(self.pm.Nmesh),1)), (np.prod(self.pm.Nmesh), 2))+self.mappm.BoxSize * 0.5 )
                     
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
@@ -384,18 +384,21 @@ class WLSimulation(FastPMSimulation):
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
             if df>self.max_ds:
-                self.logger.info('imgen passed, %d'%jj)
+                if self.params['logging']:
+                    self.logger.info('imgen passed, %d'%jj)
                 continue
             else:
-                self.logger.info('imgen with projection, %d'%jj)
+                if self.params['logging']:
+                    self.logger.info('imgen with projection, %d'%jj)
                 M, boxshift = M
                 xy, d    = self.rotate((dx + self.q)%self.pm.BoxSize, M, boxshift)
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
-                xy       = (((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(d,[np.prod(self.pm.Nmesh),1]))+self.mappm.BoxSize * 0.5 )
+                xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (np.prod(self.pm.Nmesh),1)), (np.prod(self.pm.Nmesh), 2))+self.mappm.BoxSize * 0.5 )
 
                 for ii, ds in enumerate(self.ds):
-                    self.logger.info('projection, %d'%jj)
+                    if self.params['logging']: 
+                        self.logger.info('projection, %d'%jj)
                     w        = self.wlen(d,ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor   
@@ -475,8 +478,8 @@ class WLSimulation(FastPMSimulation):
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
         for ai, af in zip(stages[:-1], stages[1:]):
-            
-            self.logger.info('fastpm step, %d'%jj)
+            if self.params['logging']:   
+                self.logger.info('fastpm step, %d'%jj)
             # central scale factor
             ac = (ai * af) ** 0.5
 
@@ -525,21 +528,18 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     '''
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
-    
-    a_logger = logging.getLogger()
+    if params['logging']: 
+        a_logger = logging.getLogger()
+        lformat = logging.Formatter('%(asctime)s - %(message)s')
 
-    lformat = logging.Formatter('%(asctime)s - %(message)s')
+        output_file_handler = logging.FileHandler("proc%d.log"%rank)
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        output_file_handler.setFormatter(lformat)
 
-
-    output_file_handler = logging.FileHandler("proc%d.log"%rank)
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    output_file_handler.setFormatter(lformat)
-
-    a_logger.addHandler(output_file_handler)
-    a_logger.addHandler(stdout_handler)
-
-
-
+        a_logger.addHandler(output_file_handler)
+        a_logger.addHandler(stdout_handler)
+    else:
+        a_logger = None
     # particle mesh for fastpm simulation
     pm        = fastpm.ParticleMesh(Nmesh=params['Nmesh'], BoxSize=params['BoxSize'], comm=MPI.COMM_WORLD, resampler='cic')
     
@@ -555,7 +555,8 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     rho       = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
-    logging.info('simulations starts')
+    if params['logging']:
+        logging.info('simulations starts')
     # weak lensing simulation object
     wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, logger=a_logger)
 
