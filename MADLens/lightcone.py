@@ -361,7 +361,7 @@ class WLSimulation(FastPMSimulation):
                 xy, d    = self.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
 
                 # projection
-                xy       = (((xy - self.pm.BoxSize[:2]* 0.5))/linalg.broadcast_to(d,[np.prod(self.pm.Nemsh),1])+ self.mappm.BoxSize * 0.5 )
+                xy       = (((xy - self.pm.BoxSize[:2]* 0.5)/linalg.stack((d,d),axis=-1))+ self.mappm.BoxSize * 0.5 )
                     
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
@@ -392,7 +392,7 @@ class WLSimulation(FastPMSimulation):
                 xy, d    = self.rotate((dx + self.q)%self.pm.BoxSize, M, boxshift)
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
-                xy       = (((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(d,[np.prod(self.pm.Nmesh),1]))+self.mappm.BoxSize * 0.5 )
+                xy       = (((xy - self.pm.BoxSize[:2] * 0.5)/linalg.stack((d,d),axis=-1))+self.mappm.BoxSize * 0.5 )
 
                 for ii, ds in enumerate(self.ds):
                     self.logger.info('projection, %d'%jj)
