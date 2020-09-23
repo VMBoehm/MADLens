@@ -9,7 +9,7 @@ bcast-pip https://github.com/abseil/abseil-py/archive/master.zip
 
 export KMP_AFFINITY=disabled
 export MPICH_GNI_FORK_MODE=FULLCOPY
-export OMP_NUM_THREADS=4
+export OMP_NUM_THREADS=1
 
 #run the sims with:
 #srun -n num_proc -c 2 python -u run_lightcone.py
