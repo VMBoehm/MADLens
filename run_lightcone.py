@@ -16,7 +16,7 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string('results_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
+flags.DEFINE_string('output_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',5,'number of maps to produce at each source redshift')
 flags.DEFINE_float('boxsize',256.,'size of the simulation box in Mpc/h')
@@ -31,8 +31,8 @@ flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bo
 flags.DEFINE_boolean('PGD',True,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
 flags.DEFINE_spaceseplist('zs_source',['1.0'],'source redshifts')
-flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
-flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
+flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
+flags.DEFINE_boolean('debug',False,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
 flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
 flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
@@ -73,9 +73,9 @@ def main(argv):
         cmd    = "git log --pretty=format:'%h' -n 1"
         githash= subprocess.run([cmd], stdout=subprocess.PIPE, shell=True).stdout.decode('utf-8')
         print('dumping under githash %s'%githash)
-        results_path = os.path.join(FLAGS.results_path,githash)
+        output_path = os.path.join(FLAGS.output_path,githash)
         params_path  = os.path.join(os.path.join(os.getcwd()),'runs',githash)
-        params['results_path'] = results_path
+        params['output_path'] = output_path
         print(params_path)
         if not os.path.isdir(params_path):
             os.makedirs(params_path)
@@ -84,7 +84,7 @@ def main(argv):
         num_run = 0
         found   = True
         while found:
-            path_name   = os.path.join(results_path,params['label']+'%d/'%num_run)
+            path_name   = os.path.join(output_path,params['label']+'%d/'%num_run)
             params_file = os.path.join(params_path,params['label']+'%d.json'%num_run)
             if not os.path.isdir(path_name):
                 os.makedirs(path_name)

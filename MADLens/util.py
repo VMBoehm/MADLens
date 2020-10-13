@@ -70,7 +70,7 @@ def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=Fa
             integrand+=[W_lens(chi,chi_source)**2/chi**2*Pk*(1.+z)**2]
         
         result+=[np.trapz(integrand, chis)]
-    return np.asarray(result)*factor**2
+    return np.asarray(result,dtype=float)*factor**2
 
 def get_2Dpower(x1, x2=None,dk= None, kmin=None):
     """

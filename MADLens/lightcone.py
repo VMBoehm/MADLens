@@ -98,8 +98,8 @@ class list_put:
         deriv[i] = 0
         deriv_   = np.zeros(len_x)
         deriv_[i]= 1
-        elem_    = np.asarray(elem_)
-        e        = np.asarray([elem_ for ii in range(len_x)])
+        elem_    = np.asarray(elem_,dtype=object)
+        e        = np.asarray([elem_ for ii in range(len_x)],dtype=object)
         y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('i,i...->i...',deriv_,e)
         y_       = mod_list(y_)
         return dict(y_=y_)
@@ -187,27 +187,32 @@ class ImageGenerator:
         self.chi_source = ds 
         self.vert_num   = np.ceil(vert_num)
         # basis vectors
-        x      = np.asarray([1,0,0])
-        y      = np.asarray([0,1,0])
-        z      = np.asarray([0,0,1])
+        x      = np.asarray([1,0,0],dtype=int)
+        y      = np.asarray([0,1,0],dtype=int)
+        z      = np.asarray([0,0,1],dtype=int)
         # identity shift
         self.I = np.zeros(3)
         
         # shuffle directions, only 90 deg rotations, makes a total of 6
-        self.M_matrices = [np.asarray([x,y,z]), np.asarray([x,z,y]),np.asarray([z,y,x]),np.asarray([z,x,y]), \
-                             np.asarray([y,x,z]), np.asarray([y,z,x])]
+        self.M_matrices = [np.asarray([x,y,z],dtype=int), np.asarray([x,z,y],dtype=int),np.asarray([z,y,x],dtype=int),np.asarray([z,x,y],dtype=int), \
+                             np.asarray([y,x,z],dtype=int), np.asarray([y,z,x],dtype=int)]
         
         # shifts (only repeat the box twice in x and y)
-        self.xyshifts = [np.asarray([0.5,0.5,0.]),np.asarray([-0.5,0.5,0.]),np.asarray([-0.5,-0.5,0.]),np.asarray([0.5,-0.5,0.])]      
+        self.xyshifts = [np.asarray([0.5,0.5,0.],dtype=float),np.asarray([-0.5,0.5,0.],dtype=float),np.asarray([-0.5,-0.5,0.],dtype=float),np.asarray([0.5,-0.5,0.],dtype=float)]      
         
         # make sure we cover entire redshift range
         self.len = len(self.M_matrices)
-        if self.len*pm.BoxSize[-1]>ds:
+        if pm.comm.rank==0:
+            print('rotations available: %d'%self.len)
+            print('rotations required: %d'%np.ceil(ds/pm.BoxSize[-1]))
+    
+        try:
+            assert(self.len*pm.BoxSize[-1]>ds)
             if pm.comm.rank==0:
-                print('sufficient number of rotations to fill lightcone')
-        else:
+                print('sufficient number of rotations to fill lightcone.')
+        except:
             if pm.comm.rank==0:
-                print('insufficient number of rotations to fill lightcone')
+                print('insufficient number of rotations to fill the lightcone.')
         
         self.x = x
         self.z = z
@@ -255,7 +260,7 @@ class WLSimulation(FastPMSimulation):
 
         # source redshifts and distances
         self.zs      = params['zs_source']
-        self.ds      = np.asarray([cosmology.comoving_distance(zs) for zs in self.zs])
+        self.ds      = np.asarray([cosmology.comoving_distance(zs) for zs in self.zs],dtype=float)
         # maximal distance at which particles need to be read out
         self.max_ds  = max(self.ds)
         
@@ -339,7 +344,7 @@ class WLSimulation(FastPMSimulation):
     @autooperator('dx,p, kmaps, dx_PGD->kmaps')
     def interp(self, dx, p, kmaps, dx_PGD, ax, ap, ai, af):
 
-        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=float) - 1.)
 
         for M in self.imgen.generate(di, df):
             # if lower end of box further away than source -> do nothing
@@ -379,7 +384,7 @@ class WLSimulation(FastPMSimulation):
         dx = dx + dx_PGD
 
         
-        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
