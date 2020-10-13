@@ -6,6 +6,8 @@ bcast-pip https://github.com/rainwoodman/vmad/archive/master.zip
 bcast-pip https://github.com/bccp/abopt/archive/master.zip
 bcast-pip https://github.com/rainwoodman/fastpm-python/archive/master.zip
 bcast-pip https://github.com/abseil/abseil-py/archive/master.zip
+#bcast-pip https://github.com/numba/numba/archive/master.zip
+
 
 export KMP_AFFINITY=disabled
 export MPICH_GNI_FORK_MODE=FULLCOPY

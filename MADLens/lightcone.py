@@ -262,7 +262,7 @@ class WLSimulation(FastPMSimulation):
         # redshift as a function of comsoving distance for underlying cosmology
         z_int          = np.logspace(-12,np.log10(1500),40000)
         chis           = cosmology.comoving_distance(z_int) #Mpc/h
-        self.z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind=3,bounds_error=False, fill_value=0.)
+        self.z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind='linear', bounds_error=False, fill_value='extrapolate')
 
         #how many times to duplicate the box in x-y to span the observed area (probably not desired for machine learning!)
         self.vert_num  = (max(boxsize2D)*max(self.ds))/pm.BoxSize[-1]

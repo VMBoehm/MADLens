@@ -145,6 +145,8 @@ def save_snapshot(pos,ii,zi,zf,params):
         save3Dpower(mesh,ii,zi,zf,params)
     return True
 
+
+
 class Run():
     """
     class that holds results of a single run
@@ -222,12 +224,17 @@ class Run():
         except:
             raise ValueError('%.1f not in '%z_source, self.params['zs_source'])
             
-        clfile = os.path.join(self.dirs['cls'],'mean_cl_zsource%d_averaged_over_%dmaps.npy'%(z_source*10,self.params['N_maps']))
-        res    = np.load(clfile)
-        
+        clkks = []
+        for num in range(self.params['N_maps']):
+            kappa_map = self.get_map(z_source,num)
+            L, clkk, N = get_2Dpower(kappa_map)
+            clkks.append(clkk)
+            
         self.measured_cls[str(z_source)]={}
-        for ii, tag in enumerate(['L','clkk','clkk_std','N']):
-            self.measured_cls[str(z_source)][tag] = res[ii]
+        self.measured_cls[str(z_source)]['L'] = L
+        self.measured_cls[str(z_source)]['clkk'] = np.mean(clkks, axis=0)
+        self.measured_cls[str(z_source)]['clkk_std'] = np.std(clkks, axis=0)
+        self.measured_cls[str(z_source)]['N'] = N
         
         return True
     
@@ -253,7 +260,3 @@ class Run():
         kappa_map = self.pm2D.create(type='real',value=kappa_map)
         
         return kappa_map
-
-
-
-
