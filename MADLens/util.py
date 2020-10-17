@@ -147,6 +147,37 @@ def save_snapshot(pos,ii,zi,zf,params):
 
 
 
+def lowpass_transfer(r):
+    def filter(k, v):
+        k2 = sum(ki ** 2 for ki in k)
+        return np.exp(-0.5 * k2 * r**2) * v
+    return filter
+
+def get_fov(cosmo,BoxSize,z_source):
+    """
+    get the field of view (in degrees) for given boxsize and source redshift
+    """
+    chi_source = cosmo.angular_diameter_distance(z_source)*(1+z_source)
+    fov        = BoxSize[0:2]/chi_source/np.pi*180.
+    return fov
+
+
+
+def downsample_map(x,desired_pixel_num,params):
+    fov     = params['BoxSize2D'][0]
+    pix_size= fov/params['Nmesh2D'][0]
+    num_pix = np.cast['int32'](np.round((fov/(pix_size))))
+    new_pm  = ParticleMesh(BoxSize=[fov/180.*np.pi]*2, Nmesh=[num_pix]*2)
+
+    new_map = new_pm.create(type='real',value=x)
+    new_pm  = ParticleMesh(BoxSize=[fov/180.*np.pi]*2, Nmesh=[desired_pixel_num]*2, resampler='cic')
+    new_map = new_pm.downsample(new_map,resampler='cic',keep_mean=True)
+    
+    return new_map
+
+
+
+
 class Run():
     """
     class that holds results of a single run
@@ -166,7 +197,7 @@ class Run():
         with open(params_file, 'r') as f:
             self.params = json.load(f)
             
-        path_name   = os.path.join(self.params['results_path'],self.params['label']+'%d/'%rnum)
+        path_name   = os.path.join(self.params['output_path'],self.params['label']+'%d/'%rnum)
         self.dirs = {}
         for result in ['cls','maps','snapshots']:
             self.dirs[result] = os.path.join(path_name,result)
@@ -186,6 +217,7 @@ class Run():
         
         self.theory_cls   = {}
         self.measured_cls = {}
+        print('Loading run with BoxSize %d, Resolution %d, SourceRedshift %.2f, PGD %s and interpolation %s.'%(self.params['BoxSize'][0], self.params['Nmesh'][0], self.params['zs_source'][0], str(self.params['PGD']), str(self.params['interpolate'])))
         
     def fill_cl_dicts(self):
         """
@@ -214,11 +246,12 @@ class Run():
         
         return True
     
-    def get_measured_cls(self,z_source):
+    def get_measured_cls(self,z_source,downsample=True):
         """
         loads measured clkk for given source redshift 
         z_source: float, source redshift
         """
+
         try:
             assert(z_source in self.params['zs_source'])
         except:
@@ -227,6 +260,8 @@ class Run():
         clkks = []
         for num in range(self.params['N_maps']):
             kappa_map = self.get_map(z_source,num)
+            if downsample:
+                kappa_map=downsample_map(kappa_map,self.params['Nmesh2D'][0]//2,self.params)
             L, clkk, N = get_2Dpower(kappa_map)
             clkks.append(clkk)
             
