@@ -219,12 +219,12 @@ class Run():
         self.measured_cls = {}
         print('Loading run with BoxSize %d, Resolution %d, SourceRedshift %.2f, PGD %s and interpolation %s.'%(self.params['BoxSize'][0], self.params['Nmesh'][0], self.params['zs_source'][0], str(self.params['PGD']), str(self.params['interpolate'])))
         
-    def fill_cl_dicts(self):
+    def fill_cl_dicts(self,downsample=True):
         """
         fill cl dictionary with results for all source redshifts in this run
         """
         for zs in self.params['zs_source']:
-            self.get_measured_cls(zs)
+            self.get_measured_cls(zs,downsample)
             self.get_theory_cl(self.measured_cls[str(zs)]['L'],zs)
             
         return True
