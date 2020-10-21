@@ -133,7 +133,7 @@ def save_2Dmap(x,filename):
 def save3Dpower(mesh,ii,zi,zf,params,name):
     power = FFTPower(mesh, mode='1d')
     if mesh.pm.comm.rank==0:
-        pickle.dump([zi,zf,power],open(os.path.join(params['snapshot_dir'],'power_%s_%d.pkl'%(ii,name),'wb')))
+        pickle.dump([zi,zf,power],open(os.path.join(params['snapshot_dir'],'power_%s_%d.pkl'%(name,ii)),'wb'))
     return True
 
 def save_snapshot(pos,ii,zi,zf,params,name):
