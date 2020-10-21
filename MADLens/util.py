@@ -130,19 +130,19 @@ def save_2Dmap(x,filename):
         np.save(filename,x_array)
     return True
 
-def save3Dpower(mesh,ii,zi,zf,params):
+def save3Dpower(mesh,ii,zi,zf,params,name):
     power = FFTPower(mesh, mode='1d')
     if mesh.pm.comm.rank==0:
-        pickle.dump([zi,zf,power],open(os.path.join(params['snapshot_dir'],'power_%d.pkl'%ii),'wb'))
+        pickle.dump([zi,zf,power],open(os.path.join(params['snapshot_dir'],'power_%s_%d.pkl'%(ii,name),'wb')))
     return True
 
-def save_snapshot(pos,ii,zi,zf,params):
+def save_snapshot(pos,ii,zi,zf,params,name):
     cat    = ArrayCatalog({'Position' : pos}, BoxSize=params['BoxSize'])
     mesh   = cat.to_mesh(Nmesh=params['Nmesh'], interlaced=True, compensated=True, window='cic')
     if params['save3D']:
-        mesh.save(os.path.join(params['snapshot_dir'],'%d'%ii))
+        mesh.save(os.path.join(params['snapshot_dir'],'%s_%d'%(name,ii)))
     if params['save3Dpower']:
-        save3Dpower(mesh,ii,zi,zf,params)
+        save3Dpower(mesh,ii,zi,zf,params,name)
     return True
 
 
@@ -218,7 +218,14 @@ class Run():
         self.theory_cls   = {}
         self.measured_cls = {}
         print('Loading run with BoxSize %d, Resolution %d, SourceRedshift %.2f, PGD %s and interpolation %s.'%(self.params['BoxSize'][0], self.params['Nmesh'][0], self.params['zs_source'][0], str(self.params['PGD']), str(self.params['interpolate'])))
+    
+        # count how many maps have been dumped
+        NN = len(os.listdir(self.dirs['maps']))
+        if NN<self.params['N_maps']:
+            print('less maps produces than requested. Requested:%d Produced:%d'%(self.params['N_maps'],NN))
+        self.N_maps = NN
         
+    
     def fill_cl_dicts(self,downsample=True):
         """
         fill cl dictionary with results for all source redshifts in this run
@@ -258,7 +265,7 @@ class Run():
             raise ValueError('%.1f not in '%z_source, self.params['zs_source'])
             
         clkks = []
-        for num in range(self.params['N_maps']):
+        for num in range(self.N_maps):
             kappa_map = self.get_map(z_source,num)
             if downsample:
                 kappa_map=downsample_map(kappa_map,self.params['Nmesh2D'][0]//2,self.params)
@@ -286,7 +293,7 @@ class Run():
             raise ValueError('%.1f not in '%z_source, self.params['zs_source'])
         
         try:
-            assert(num<self.params['N_maps'])
+            assert(num<self.N_maps)
         except:
             raise ValueError('%d map was not computed'%num)
         
