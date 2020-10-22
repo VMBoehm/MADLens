@@ -182,7 +182,7 @@ class Run():
     """
     class that holds results of a single run
     """
-    def __init__(self, githash, label, rnum, local_path):
+    def __init__(self, githash, label, rnum, local_path, alter_path=None):
         """
         loads the parameter file of the run
         githash: string, abridged githash of commit under which the run was performed
@@ -196,8 +196,11 @@ class Run():
         params_file  = os.path.join(params_path,label+'%d.json'%rnum)
         with open(params_file, 'r') as f:
             self.params = json.load(f)
-            
-        path_name   = os.path.join(self.params['output_path'],self.params['label']+'%d/'%rnum)
+        if alter_path is None:
+            path_name   = os.path.join(self.params['output_path'],self.params['label']+'%d/'%rnum)
+        else:
+            path_name   = os.path.join(alter_path,self.params['label']+'%d/'%rnum)
+        
         self.dirs = {}
         for result in ['cls','maps','snapshots']:
             self.dirs[result] = os.path.join(path_name,result)
@@ -302,3 +305,22 @@ class Run():
         kappa_map = self.pm2D.create(type='real',value=kappa_map)
         
         return kappa_map
+
+    def get_Pks(self):
+        k_max      = max(20.*np.pi*(self.pm.Nmesh.max()/self.pm.BoxSize.min()),100.)
+        cosmo      = self.cosmo.clone(P_k_max=max(k_max*2.,200), perturb_sampling_stepsize=0.01,nonlinear=True)
+        self.halofit = {}
+        self.lin = {}
+        self.pks = {}
+        self.pks_PGD = {}      
+        for pw in os.listdir(self.dirs['snapshots']):
+             if 'power' in pw:
+                _ ,zf,power = pickle.load(open(os.path.join(self.dirs['snapshots'],pw),'rb'))
+                if 'raw' in pw:
+                    self.pks[str(zf)]= power
+                    self.halofit[str(zf)] = cosmo.get_pk(self.pks[str(zf)].power['k'],zf)
+                    self.lin[str(zf)] = self.cosmo.get_pk(self.pks[str(zf)].power['k'],zf)
+                else:
+                    self.pks_PGD[str(zf)]=power
+
+        return True 

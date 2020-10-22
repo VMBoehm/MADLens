@@ -506,10 +506,11 @@ class WLSimulation(FastPMSimulation):
             if self.params['save3D'] or self.params['save3Dpower']:
                 zf       = 1./af-1.
                 zi       = 1./ai-1.
-                pos_raw  = dx+q
-                pos      = pos_raw+dx_PGD
-                stdlib.watchpoint(pos_raw,lambda pos, ii=jj,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params,'raw'))
-                stdlib.watchpoint(pos,lambda pos, ii=jj,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params,'PGD'))
+                if zi<self.params['zs_source']:
+                    pos_raw  = dx+q
+                    pos      = pos_raw+dx_PGD
+                    stdlib.watchpoint(pos_raw,lambda pos, ii=jj,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params,'raw'))
+                    stdlib.watchpoint(pos,lambda pos, ii=jj,zi=zi,zf=zf,params=self.params: save_snapshot(pos,ii,zi,zf,params,'PGD'))
             
  
             jj+=1

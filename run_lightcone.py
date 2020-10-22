@@ -33,7 +33,7 @@ flags.DEFINE_integer('B',2,'force resolution factor')
 flags.DEFINE_spaceseplist('zs_source',['1.2'],'source redshifts')
 flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
-flags.DEFINE_boolean('save3D',True,'whether to dump the snapshots, requires interp to be set to False')
+flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
 flags.DEFINE_boolean('save3Dpower', True, 'whether to measure and save the power spectra of the snapshots')
 flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', False, 'whether to compute the jvp')
@@ -76,7 +76,7 @@ def main(argv):
         output_path = os.path.join(FLAGS.output_path,githash)
         params_path  = os.path.join(os.path.join(os.getcwd()),'runs',githash)
         params['output_path'] = output_path
-        print(params_path)
+        print(params_path, params['output_path'])
         if not os.path.isdir(params_path):
             os.makedirs(params_path)
 
@@ -102,6 +102,7 @@ def main(argv):
                         num_run+=1
 
         for result in ['cls','maps','snapshots']:
+            print(path_name)
             dirs[result] = os.path.join(path_name,result)
             if not os.path.isdir(dirs[result]):
                 os.makedirs(dirs[result])
