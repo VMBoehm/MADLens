@@ -138,7 +138,7 @@ def save3Dpower(mesh,ii,zi,zf,params,name):
 
 def save_snapshot(pos,ii,zi,zf,params,name):
     cat    = ArrayCatalog({'Position' : pos}, BoxSize=params['BoxSize'])
-    mesh   = cat.to_mesh(Nmesh=params['Nmesh'], interlaced=True, compensated=True, window='cic')
+    mesh   = cat.to_mesh(Nmesh=params['Nmesh']*4, interlaced=True, compensated=True, window='cic')
     if params['save3D']:
         mesh.save(os.path.join(params['snapshot_dir'],'%s_%d'%(name,ii)))
     if params['save3Dpower']:

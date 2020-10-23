@@ -19,10 +19,10 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('output_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
-flags.DEFINE_float('boxsize',256.,'size of the simulation box in Mpc/h')
+flags.DEFINE_float('boxsize',512.,'size of the simulation box in Mpc/h')
 flags.DEFINE_integer('Nmesh',1024,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
-flags.DEFINE_float('boxsize2D',6.3761717551304855,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
+flags.DEFINE_float('boxsize2D',12.752343510260971,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 flags.DEFINE_bool('custom_cosmo', False, 'custom cosmology? If true, read in values for sigma8 and Omega_m, otherwise use Plmack15 as default') 
