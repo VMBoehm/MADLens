@@ -21,7 +21,7 @@ def z2a(z):
     """
     return 1./(1.+z)
 
-def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=False):
+def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,pk=True,SN=None):
     """
     computes clkk from halofit Pk for given 
     ells: 1D array, scales at which to compute clkk
@@ -33,12 +33,6 @@ def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=Fa
     k_max: float (optional), maximal k to use in Pk
     shotnoise, bool (optional), if true, add estimate of shotnoise in the simulation to Pk
     """
-
-    if shotnoise:
-        #not strictly correct
-        n = pm.Nmesh.prod()/pm.BoxSize.prod()
-    else:
-        n = None
 
     if k_max == None:     
         k_max      = max(20.*np.pi*(pm.Nmesh.max()/pm.BoxSize.min()),100.)
@@ -60,10 +54,10 @@ def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,shotnoise=Fa
             k = l_/chi #in h/Mpc
             z = z_chi_int(chi)
             if (k>k_min)*(k<k_max):
-                Pk = cosmo.get_pk(k,z)
-                if shotnoise:
-                    #not strictly correct for los
-                    Pk+=1./(n)
+                if pk:
+                    Pk = cosmo.get_pk(k,z)
+                elif shotnoise:
+                    Pk = SN
             else:
                 Pk = 0.
             # use Limber approximation
@@ -131,20 +125,21 @@ def save_2Dmap(x,filename):
     return True
 
 def save3Dpower(mesh,ii,zi,zf,params,name):
-    power = FFTPower(mesh, mode='1d')
+    power   = FFTPower(mesh, mode='1d')
+    Nyquist = np.pi*mesh.Nmesh[0]/mesh.BoxSize[0]
     if mesh.pm.comm.rank==0:
-        pickle.dump([zi,zf,power],open(os.path.join(params['snapshot_dir'],'power_%s_%d.pkl'%(name,ii)),'wb'))
+        pickle.dump([zi,zf,power,Nyquist],open(os.path.join(params['snapshot_dir'],'power_%s_%d.pkl'%(name,ii)),'wb'))
     return True
 
 def save_snapshot(pos,ii,zi,zf,params,name):
-    cat    = ArrayCatalog({'Position' : pos}, BoxSize=params['BoxSize'])
-    mesh   = cat.to_mesh(Nmesh=params['Nmesh']*4, interlaced=True, compensated=True, window='cic')
+    cat       = ArrayCatalog({'Position' : pos}, BoxSize=params['BoxSize'])
+    mesh      = cat.to_mesh(Nmesh=params['Nmesh']*4, interlaced=True, compensated=True, window='cic')
+    #compute shotnoise with cat.weight? Use gather?
     if params['save3D']:
         mesh.save(os.path.join(params['snapshot_dir'],'%s_%d'%(name,ii)))
     if params['save3Dpower']:
         save3Dpower(mesh,ii,zi,zf,params,name)
     return True
-
 
 
 def lowpass_transfer(r):
@@ -160,7 +155,6 @@ def get_fov(cosmo,BoxSize,z_source):
     chi_source = cosmo.angular_diameter_distance(z_source)*(1+z_source)
     fov        = BoxSize[0:2]/chi_source/np.pi*180.
     return fov
-
 
 
 def downsample_map(x,desired_pixel_num,params):
@@ -227,6 +221,9 @@ class Run():
         if NN<self.params['N_maps']:
             print('less maps produces than requested. Requested:%d Produced:%d'%(self.params['N_maps'],NN))
         self.N_maps = NN
+
+        self.Nyquist_3D = np.pi*self.pm.Nmesh[0]/self.pm.BoxSize[0]
+        self.Nyquist_2D = np.pi*self.pm2D.Nmesh[0]/self.pm2D.BoxSize[0]
         
     
     def fill_cl_dicts(self,downsample=True):
@@ -252,8 +249,12 @@ class Run():
         
         self.theory_cls[str(z_source)] = {}
         self.theory_cls[str(z_source)]['L'] = bink
-        self.theory_cls[str(z_source)]['clkk'] = res 
+        self.theory_cls[str(z_source)]['clkk'] = res
+
+        res = get_Cell(cosmo=self.cosmo,ells=bink,z_source=z_source, z_chi_int=self.z_chi_int, pm=self.pm, pk=False, SN=self.pm.BoxSize.prod()/self.pm.Nmesh.prod())
         
+        self.theory_cls[str(z_source)]['SN'] = res
+
         return True
     
     def get_measured_cls(self,z_source,downsample=True):
@@ -280,6 +281,7 @@ class Run():
         self.measured_cls[str(z_source)]['clkk'] = np.mean(clkks, axis=0)
         self.measured_cls[str(z_source)]['clkk_std'] = np.std(clkks, axis=0)
         self.measured_cls[str(z_source)]['N'] = N
+        self.measured_cls[str(z_source)]['SN']= self.pm2D.BoxSize.prod()/self.pm2D.Nmesh.prod()
         
         return True
     
