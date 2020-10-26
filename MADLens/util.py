@@ -142,6 +142,15 @@ def save_snapshot(pos,ii,zi,zf,params,name):
     return True
 
 
+def compute_shape_noise_power(sigma_e,n,A):
+    """ sigma_e: shape noise
+        n: galaxies per arcmin^2
+        A: surface per arcmin62
+    """
+    Cl = sigma**2/(n*A)
+    return Cl
+
+
 def lowpass_transfer(r):
     def filter(k, v):
         k2 = sum(ki ** 2 for ki in k)
