@@ -21,7 +21,7 @@ def z2a(z):
     """
     return 1./(1.+z)
 
-def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,pk=True,SN=None):
+def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,pk=True,other=None):
     """
     computes clkk from halofit Pk for given 
     ells: 1D array, scales at which to compute clkk
@@ -56,8 +56,8 @@ def get_Cell(ells,z_source,cosmo,z_chi_int,pm,k_min=None,k_max=None,pk=True,SN=N
             if (k>k_min)*(k<k_max):
                 if pk:
                     Pk = cosmo.get_pk(k,z)
-                elif shotnoise:
-                    Pk = SN
+                else:
+                    Pk = other(k,z)
             else:
                 Pk = 0.
             # use Limber approximation
