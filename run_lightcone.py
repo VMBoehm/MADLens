@@ -19,22 +19,22 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('output_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
-flags.DEFINE_float('boxsize',512.,'size of the simulation box in Mpc/h')
-flags.DEFINE_integer('Nmesh',1024,'resolution of fastPM mesh')
+flags.DEFINE_float('boxsize',256.,'size of the simulation box in Mpc/h')
+flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
-flags.DEFINE_float('boxsize2D',12.752343510260971,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
+flags.DEFINE_float('boxsize2D',5.601123510983721,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 flags.DEFINE_bool('custom_cosmo', False, 'custom cosmology? If true, read in values for sigma8 and Omega_m, otherwise use Plmack15 as default') 
 flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
-flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
+flags.DEFINE_boolean('PGD',True,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
-flags.DEFINE_spaceseplist('zs_source',['1.0'],'source redshifts')
-flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
+flags.DEFINE_spaceseplist('zs_source',['1.2'],'source redshifts')
+flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
-flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
-flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
+flags.DEFINE_boolean('save3D',True,'whether to dump the snapshots, requires interp to be set to False')
+flags.DEFINE_boolean('save3Dpower', True, 'whether to measure and save the power spectra of the snapshots')
 flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', False, 'whether to compute the jvp')
 flags.DEFINE_boolean('forward',True, 'whether to run forward model')
@@ -76,7 +76,7 @@ def main(argv):
         output_path = os.path.join(FLAGS.output_path,githash)
         params_path  = os.path.join(os.path.join(os.getcwd()),'runs',githash)
         params['output_path'] = output_path
-        print(params_path, params['output_path'])
+        print(params_path)
         if not os.path.isdir(params_path):
             os.makedirs(params_path)
 
@@ -102,7 +102,6 @@ def main(argv):
                         num_run+=1
 
         for result in ['cls','maps','snapshots']:
-            print(path_name)
             dirs[result] = os.path.join(path_name,result)
             if not os.path.isdir(dirs[result]):
                 os.makedirs(dirs[result])
