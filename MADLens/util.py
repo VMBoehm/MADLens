@@ -126,14 +126,15 @@ def save_2Dmap(x,filename):
 
 def save3Dpower(mesh,ii,zi,zf,params,name):
     power   = FFTPower(mesh, mode='1d')
-    Nyquist = np.pi*mesh.Nmesh[0]/mesh.BoxSize[0]
+    Nyquist = np.pi*mesh.pm.Nmesh[0]/mesh.pm.BoxSize[0]
     if mesh.pm.comm.rank==0:
         pickle.dump([zi,zf,power,Nyquist],open(os.path.join(params['snapshot_dir'],'power_%s_%d.pkl'%(name,ii)),'wb'))
     return True
 
 def save_snapshot(pos,ii,zi,zf,params,name):
     cat       = ArrayCatalog({'Position' : pos}, BoxSize=params['BoxSize'])
-    mesh      = cat.to_mesh(Nmesh=params['Nmesh']*4, interlaced=True, compensated=True, window='cic')
+    Nmesh     = [Nm*8 for Nm in params['Nmesh']]
+    mesh      = cat.to_mesh(Nmesh=Nmesh, interlaced=True, compensated=True, window='cic')
     #compute shotnoise with cat.weight? Use gather?
     if params['save3D']:
         mesh.save(os.path.join(params['snapshot_dir'],'%s_%d'%(name,ii)))
@@ -142,12 +143,12 @@ def save_snapshot(pos,ii,zi,zf,params,name):
     return True
 
 
-def compute_shape_noise_power(sigma_e,n,A):
+def compute_shape_noise_power(sigma_e,n,fsky):
     """ sigma_e: shape noise
         n: galaxies per arcmin^2
         A: surface per arcmin62
     """
-    Cl = sigma**2/(n*A)
+    Cl = fsky*sigma_e**2/n
     return Cl
 
 
@@ -232,8 +233,7 @@ class Run():
         self.N_maps = NN
 
         self.Nyquist_3D = np.pi*self.pm.Nmesh[0]/self.pm.BoxSize[0]
-        self.Nyquist_2D = np.pi*self.pm2D.Nmesh[0]/self.pm2D.BoxSize[0]
-        
+        self.Nyquist_2D = np.pi*self.pm2D.Nmesh[0]/self.pm2D.BoxSize[0] 
     
     def fill_cl_dicts(self,downsample=True):
         """
@@ -269,7 +269,24 @@ class Run():
         self.theory_cls[str(z_source)]['SN'] = res
 
         return True
-    
+
+    def get_other_cls(self,z_source,other,bink=None,kmin=None,kmax=None):
+        
+        if np.any(bink==None):
+            try:
+                bink = self.measured_cls[str(z_source)]['L']
+            except:
+                raise ValueError('bink must be specified')
+
+        res = get_Cell(cosmo=self.cosmo,ells=bink,z_source=z_source, z_chi_int=self.z_chi_int, pm=self.pm, other=other, k_max=kmax, k_min=kmin, pk=False)
+        
+        self.other_cls = {}
+        self.other_cls[str(z_source)] = {}
+        self.other_cls[str(z_source)]['L'] = bink
+        self.other_cls[str(z_source)]['clkk'] = res   
+        
+        return True
+
     def get_measured_cls(self,z_source,downsample=True):
         """
         loads measured clkk for given source redshift 
@@ -328,15 +345,43 @@ class Run():
         self.halofit = {}
         self.lin = {}
         self.pks = {}
-        self.pks_PGD = {}      
+        self.pks_PGD = {}
+        zs_ = []
+        pk_ = [] 
         for pw in os.listdir(self.dirs['snapshots']):
              if 'power' in pw:
-                _ ,zf,power = pickle.load(open(os.path.join(self.dirs['snapshots'],pw),'rb'))
+                _ ,zf,power, f_N = pickle.load(open(os.path.join(self.dirs['snapshots'],pw),'rb'))
                 if 'raw' in pw:
-                    self.pks[str(zf)]= power
+                    self.pks[str(zf)] = power
                     self.halofit[str(zf)] = cosmo.get_pk(self.pks[str(zf)].power['k'],zf)
                     self.lin[str(zf)] = self.cosmo.get_pk(self.pks[str(zf)].power['k'],zf)
                 else:
                     self.pks_PGD[str(zf)]=power
+                    pk_.append(power.power['power'])
+                    zs_.append(zf)
+        indices = np.argsort(zs_)
+        self.PGD_interp = interp_pk(self.pks[str(zf)].power['k'],np.asarray(zs_)[indices],np.asarray(pk_)[indices]) 
+        return f_N 
 
-        return True 
+
+
+def interp_pk(ks,zs,pks, shotnoise=0.):
+
+    interp = scipy.interpolate.RectBivariateSpline(ks, zs, pks-shotnoise)
+    maxk   = max(k)
+    def pk_interp(k,z):
+        k = np.asarray(k)
+        if k.ndim==0:
+            if k<maxk:
+                result = interp(k,z)
+            else:
+                result = interp(maxk,z)*maxk**2*k**(-2)
+        else:
+            index1 = np.where(k<=maxk)
+            index2 = np.where(k>maxk)
+            result = np.zeros(k.shape)
+            result[index1]= np.squeeze(interp(k[index1],z))
+            result[index2]= interp(maxk,z)*maxk**2*k[index2]**(-2)
+        return result
+
+    return pk_interp
