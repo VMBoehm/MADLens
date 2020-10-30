@@ -1,6 +1,6 @@
 import time
 start = time.time()
-from MADLens.lightcone import run_wl_sim
+from MADLens.lightcone_wn import run_wl_sim
 from nbodykit.cosmology import Planck15
 from MADLens.util import get_2Dpower, save_2Dmap
 import numpy as np
@@ -20,21 +20,21 @@ flags.DEFINE_string('output_path',os.path.join(os.getcwd(),'results/'), "path fo
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
 flags.DEFINE_float('boxsize',256.,'size of the simulation box in Mpc/h')
-flags.DEFINE_integer('Nmesh',16,'resolution of fastPM mesh')
+flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',256, 'resolution of lensing map')
 flags.DEFINE_float('boxsize2D',5.5,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
-flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
+flags.DEFINE_integer('N_steps',2,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 flags.DEFINE_bool('custom_cosmo', False, 'custom cosmology? If true, read in values for sigma8 and Omega_m, otherwise use Plmack15 as default') 
 flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
-flags.DEFINE_boolean('PGD',True,'whether to use PGD sharpening')
+flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
 flags.DEFINE_spaceseplist('zs_source',['1.2'],'source redshifts')
 flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
-flags.DEFINE_boolean('save3D',True,'whether to dump the snapshots, requires interp to be set to False')
-flags.DEFINE_boolean('save3Dpower', True, 'whether to measure and save the power spectra of the snapshots')
+flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
+flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
 flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', False, 'whether to compute the jvp')
 flags.DEFINE_boolean('forward',True, 'whether to run forward model')
