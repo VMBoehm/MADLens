@@ -260,7 +260,6 @@ class Run():
         self.theory_cls[str(z_source)]['L'] = bink
         self.theory_cls[str(z_source)]['clkk'] = res
 
-        # todo: correct or does this need a weight? 
         def shotnoise(k,z):
             return self.pm.BoxSize.prod()/self.pm.Nmesh.prod()
 
@@ -311,8 +310,7 @@ class Run():
         self.measured_cls[str(z_source)]['clkk'] = np.mean(clkks, axis=0)
         self.measured_cls[str(z_source)]['clkk_std'] = np.std(clkks, axis=0)
         self.measured_cls[str(z_source)]['N'] = N
-        #todo: this needs to be corrected by the lensing kernel. How do we do this?
-        self.measured_cls[str(z_source)]['SN']= self.pm2D.BoxSize.prod()/(self.pm.Nmesh.prod()*self.cosmo.comoving_distance(z_source)/self.pm.BoxSize[-1]*1./3.)
+
         
         return True
     
