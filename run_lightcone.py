@@ -22,7 +22,7 @@ flags.DEFINE_integer('N_maps',5,'number of maps to produce at each source redshi
 flags.DEFINE_float('boxsize',512.,'size of the simulation box in Mpc/h')
 flags.DEFINE_integer('Nmesh',512,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
-flags.DEFINE_float('boxsize2D',11.0,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
+flags.DEFINE_float('boxsize2D',21.8,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 flags.DEFINE_bool('custom_cosmo', False, 'custom cosmology? If true, read in values for sigma8 and Omega_m, otherwise use Plmack15 as default') 
@@ -30,7 +30,7 @@ flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upp
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
 flags.DEFINE_boolean('PGD',True,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
-flags.DEFINE_spaceseplist('zs_source',['1.2'],'source redshifts')
+flags.DEFINE_spaceseplist('zs_source',['0.5'],'source redshifts')
 flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
