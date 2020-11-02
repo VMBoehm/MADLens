@@ -18,7 +18,7 @@ rank = comm.Get_rank()
 FLAGS = flags.FLAGS
 flags.DEFINE_string('output_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
-flags.DEFINE_integer('N_maps',10,'number of maps to produce at each source redshift')
+flags.DEFINE_integer('N_maps',40,'number of maps to produce at each source redshift')
 flags.DEFINE_float('boxsize',256.,'size of the simulation box in Mpc/h')
 flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
