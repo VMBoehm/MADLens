@@ -224,13 +224,14 @@ class Run():
         
         self.theory_cls   = {}
         self.measured_cls = {}
-        print('Loading run with BoxSize %d, Resolution %d, SourceRedshift %.2f, PGD %s and interpolation %s.'%(self.params['BoxSize'][0], self.params['Nmesh'][0], self.params['zs_source'][0], str(self.params['PGD']), str(self.params['interpolate'])))
+        print('Loading run with BoxSize %d, Nmesh %d, SourceRedshift %.2f, PGD %s and interpolation %s.'%(self.params['BoxSize'][0], self.params['Nmesh'][0], self.params['zs_source'][0], str(self.params['PGD']), str(self.params['interpolate'])))
     
         # count how many maps have been dumped
         NN = len(os.listdir(self.dirs['maps']))
         if NN<self.params['N_maps']:
             print('less maps produces than requested. Requested:%d Produced:%d'%(self.params['N_maps'],NN))
         self.N_maps = NN
+        print('%d maps were produced in this run'%self.N_maps)
 
         self.Nyquist_3D = np.pi*self.pm.Nmesh[0]/self.pm.BoxSize[0]
         self.Nyquist_2D = np.pi*self.pm2D.Nmesh[0]/self.pm2D.BoxSize[0] 
@@ -253,7 +254,8 @@ class Run():
             assert(z_source in self.params['zs_source'])
         except:
             raise ValueError('%.1f not in '%z_source, self.params['zs_source'])
-            
+        
+        print('Computing theory Cls....')    
         res = get_Cell(cosmo=self.cosmo,ells=bink,z_source=z_source, z_chi_int=self.z_chi_int, pm=self.pm)
         
         self.theory_cls[str(z_source)] = {}
@@ -296,7 +298,7 @@ class Run():
             assert(z_source in self.params['zs_source'])
         except:
             raise ValueError('%.1f not in '%z_source, self.params['zs_source'])
-            
+        print('Measuring Cls...')
         clkks = []
         for num in range(self.N_maps):
             kappa_map = self.get_map(z_source,num)
@@ -330,7 +332,7 @@ class Run():
             assert(num<self.N_maps)
         except:
             raise ValueError('%d map was not computed'%num)
-        
+        print('Loading maps...')
         map_file  = os.path.join(self.dirs['maps'],'map_decon_zsource%d_map%d_of%d'%(z_source*10,num,self.params['N_maps'])+'.npy')
         kappa_map = np.load(map_file).reshape(*self.pm2D.Nmesh)
         kappa_map = self.pm2D.create(type='real',value=kappa_map)
@@ -338,6 +340,7 @@ class Run():
         return kappa_map
 
     def get_Pks(self):
+        print('loading Pks....')
         k_max      = max(20.*np.pi*(self.pm.Nmesh.max()/self.pm.BoxSize.min()),100.)
         cosmo      = self.cosmo.clone(P_k_max=max(k_max*2.,200), perturb_sampling_stepsize=0.01,nonlinear=True)
         self.halofit = {}
@@ -358,15 +361,14 @@ class Run():
                     pk_.append(power.power['power'])
                     zs_.append(zf)
         indices = np.argsort(zs_)
-        self.PGD_interp = interp_pk(self.pks[str(zf)].power['k'],np.asarray(zs_)[indices],np.asarray(pk_)[indices]) 
+        self.interp_PGD = interp_pk(self.pks[str(zf)].power['k'],np.asarray(zs_)[indices],np.asarray(pk_)[indices]) 
         return f_N 
 
 
 
 def interp_pk(ks,zs,pks, shotnoise=0.):
-
-    interp = scipy.interpolate.RectBivariateSpline(ks, zs, pks-shotnoise)
-    maxk   = max(k)
+    interp = scipy.interpolate.RectBivariateSpline(ks, zs, pks.T-shotnoise)
+    maxk   = max(ks)
     def pk_interp(k,z):
         k = np.asarray(k)
         if k.ndim==0:
@@ -375,11 +377,12 @@ def interp_pk(ks,zs,pks, shotnoise=0.):
             else:
                 result = interp(maxk,z)*maxk**2*k**(-2)
         else:
-            index1 = np.where(k<=maxk)
-            index2 = np.where(k>maxk)
+            index1 = np.where(k<=maxk)[0]
+            index2 = np.where(k>maxk)[0]
             result = np.zeros(k.shape)
             result[index1]= np.squeeze(interp(k[index1],z))
-            result[index2]= interp(maxk,z)*maxk**2*k[index2]**(-2)
+            result[index2]= np.squeeze(interp(maxk,z)*maxk**2*k[index2]**(-2))
+        result = np.squeeze(result)
         return result
 
     return pk_interp
