@@ -379,9 +379,11 @@ class WLSimulation(FastPMSimulation):
         return kmaps
 
     @autooperator('dx,kmaps->kmaps')
-    def no_interp(self,dx,kmaps,ai,af,jj):
+    def no_interp(self,kmaps,ai,af,jj):
         
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
+
+        q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
@@ -393,7 +395,7 @@ class WLSimulation(FastPMSimulation):
                 if self.params['logging']:
                     self.logger.info('imgen with projection, %d'%jj)
                 M, boxshift = M
-                xy, d    = self.rotate((dx + self.q)%self.pm.BoxSize, M, boxshift)
+                xy, d    = self.rotate(q, M, boxshift)
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
                 xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
@@ -470,15 +472,6 @@ class WLSimulation(FastPMSimulation):
 
         stages = self.stages
        
-        layout = fastpm.decompose(self.q, self.pm)      
-
-        r1 = []
-        for d in range(self.pm.ndim):
-            dx = fastpm.readout(rhok, self.q, layout)
-            r1.append(dx)
-
-        dx = linalg.stack(r1, axis=-1) 
-
         powers = []
         kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
         
@@ -490,7 +483,7 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
 
-            kmaps = self.no_interp(dx,kmaps, ai, af, jj)
+            kmaps = self.no_interp(kmaps, ai, af, jj)
 
 
         return kmaps
