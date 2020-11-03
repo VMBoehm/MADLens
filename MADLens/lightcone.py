@@ -233,12 +233,12 @@ class ImageGenerator:
             if self.vert_num==1:
                 for ii in np.arange(shift_end,shift_ini+1,dtype=int):
                     M.append((self.M_matrices[ii%len(self.M_matrices)], self.I+ii*self.z))
-            elif self.vert_num==2:
-                for ii in np.arange(shift_end,shift_ini+1,dtype=int):
-                    for jj in range(4):
-                        M.append((self.M_matrices[ii%len(self.M_matrices)], self.I+ii*self.z+self.xyshifts[jj]))
+            #elif self.vert_num==2:
+            #    for ii in np.arange(shift_end,shift_ini+1,dtype=int):
+            #        for jj in range(4):
+            #            M.append((self.M_matrices[ii%len(self.M_matrices)], self.I+ii*self.z+self.xyshifts[jj]))
             else:
-                raise ValueError('vertical number of boxes must be 1 or 2, but is %d'%self.vert_num)
+                raise ValueError('vertical number of boxes must be 1, but is %d'%self.vert_num)
 
             return M
         
