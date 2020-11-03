@@ -332,7 +332,8 @@ class Run():
             assert(num<self.N_maps)
         except:
             raise ValueError('%d map was not computed'%num)
-        print('Loading maps...')
+
+        print('Loading map %d of %d...'%(num,self.N_maps))
         map_file  = os.path.join(self.dirs['maps'],'map_decon_zsource%d_map%d_of%d'%(z_source*10,num,self.params['N_maps'])+'.npy')
         kappa_map = np.load(map_file).reshape(*self.pm2D.Nmesh)
         kappa_map = self.pm2D.create(type='real',value=kappa_map)

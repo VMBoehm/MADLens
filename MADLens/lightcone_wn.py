@@ -378,12 +378,12 @@ class WLSimulation(FastPMSimulation):
          
         return kmaps
 
-    @autooperator('dx,kmaps->kmaps')
-    def no_interp(self,kmaps,ai,af,jj):
+    @autooperator('kmaps->kmaps')
+    def no_interp(self,kmaps,q,ai,af,jj):
         
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
 
-        q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
+        #q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
@@ -396,7 +396,7 @@ class WLSimulation(FastPMSimulation):
                     self.logger.info('imgen with projection, %d'%jj)
                 M, boxshift = M
                 xy, d    = self.rotate(q, M, boxshift)
-                d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
+                d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=q))
             
                 xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
 
@@ -405,7 +405,7 @@ class WLSimulation(FastPMSimulation):
                         self.logger.info('projection, %d'%jj)
                     w        = self.wlen(d,ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                    kmap_    = self.makemap(xy, w*mask)*self.factor   
+                    kmap_    = self.makemap(xy, w*mask)*self.factor 
                     kmap     = list_elem(kmaps,ii)
                     kmap     = linalg.add(kmap_,kmap)
                     kmaps    = list_put(kmaps,kmap,ii)
@@ -471,19 +471,20 @@ class WLSimulation(FastPMSimulation):
     def run(self, rhok):
 
         stages = self.stages
+
+        q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
+
        
         powers = []
         kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
         
         jj = 0 #counting steps for saving snapshots
         for ai, af in zip(stages[:-1], stages[1:]):
-            # drift (update positions)
-
-            
+            # drift (update positions)   
  
             jj+=1
 
-            kmaps = self.no_interp(kmaps, ai, af, jj)
+            kmaps = self.no_interp(kmaps, q, ai, af, jj)
 
 
         return kmaps
