@@ -419,7 +419,7 @@ class WLSimulation(FastPMSimulation):
     @autooperator('rho->kmaps')
     def run_interpolated(self, rho):
 
-        rhok   = rho.r2c()
+        rhok   = fastpm.r2c(rho)
 
         dx, p  = self.firststep(rhok)
         pt     = self.pt
@@ -473,7 +473,7 @@ class WLSimulation(FastPMSimulation):
     @autooperator('rho->kmaps')
     def run(self, rho):
         
-        rhok   = rho.r2c()
+        rhok   = fastpm.r2c(rho)
         
         dx, p  = self.firststep(rhok)
         pt     = self.pt
@@ -589,10 +589,10 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
-    v = pm.RealField()
+    #v = pm.create(type='real')
 
-    if rank==0:
-        v[0,0,0]=1.
+    #if rank==0:
+    #    v[0,0,0]=1.
 
     # results
     kmap_vjp,kmap_jvp = [None, None]
@@ -601,12 +601,12 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho),return_tape=True)
         if params['vjp']:
             vjp         = tape.get_vjp()
-            kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout='_rhok')
+            kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout='_rho')
         if params['jvp']:
             jvp      = tape.get_jvp()
-            kmap_jvp = jvp.compute(init=dict(rhok_=v), vout='kmaps_')
+            kmap_jvp = jvp.compute(init=dict(rho_=rho), vout='kmaps_')
 
     if params['forward']:
-        kmaps       = model.compute(vout='kmaps', init=dict(rhok=rho))
+        kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
 
     return kmaps, [kmap_vjp,kmap_jvp], pm

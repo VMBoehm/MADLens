@@ -35,7 +35,7 @@ flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshot
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
 flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
-flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
+flags.DEFINE_boolean('vjp', True,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', True, 'whether to compute the jvp')
 flags.DEFINE_boolean('forward',True, 'whether to run forward model')
 flags.DEFINE_boolean('analyze',False, 'whether to print out resource usage')
