@@ -416,8 +416,10 @@ class WLSimulation(FastPMSimulation):
 
 
 
-    @autooperator('rhok->kmaps')
-    def run_interpolated(self, rhok):
+    @autooperator('rho->kmaps')
+    def run_interpolated(self, rho):
+
+        rhok   = rho.r2c()
 
         dx, p  = self.firststep(rhok)
         pt     = self.pt
@@ -468,8 +470,10 @@ class WLSimulation(FastPMSimulation):
 
     
 
-    @autooperator('rhok->kmaps')
-    def run(self, rhok):
+    @autooperator('rho->kmaps')
+    def run(self, rho):
+        
+        rhok   = rho.r2c()
         
         dx, p  = self.firststep(rhok)
         pt     = self.pt
@@ -564,14 +568,15 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     rhok      = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
     rhok      = rhok.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
 
-    rho       = rhok.c2r()
-    if rank == 0:
-        rho.value[0,0,0]=rho.value[0,0,0]-1e-5
-    rho       = rho.r2c()
-    
+    #rho       = rhok.c2r()
+    #if rank == 0:
+    #    rho.value[0,0,0]=rho.value[0,0,0]-1e-5
+    #rho       = rho.r2c()
 
     #set zero mode to zero
-    rho.csetitem([0, 0, 0], 0)
+    rhok.csetitem([0, 0, 0], 0)
+
+    rho = rhok.c2r()
 
     if params['logging']:
         logging.info('simulations starts')
@@ -584,17 +589,22 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
+    v = pm.RealField()
+
+    if rank==0:
+        v[0,0,0]=1.
+
     # results
     kmap_vjp,kmap_jvp = [None, None]
     # compute
     if params['forward'] and (params['vjp'] or params['jvp']):
-        kmaps, tape = model.compute(vout='kmaps', init=dict(rhok=rho),return_tape=True)
+        kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho),return_tape=True)
         if params['vjp']:
             vjp         = tape.get_vjp()
             kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout='_rhok')
         if params['jvp']:
             jvp      = tape.get_jvp()
-            kmap_jvp = jvp.compute(init=dict(rhok_=rho), vout='kmaps_')
+            kmap_jvp = jvp.compute(init=dict(rhok_=v), vout='kmaps_')
 
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rhok=rho))
