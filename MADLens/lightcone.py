@@ -561,10 +561,17 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
 
     # generate initial conditions
     cosmo     = cosmo.clone(P_k_max=30)
-    rho       = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
-    rho       = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
+    rhok      = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
+    rhok      = rho.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
+
+    rho       = rhok.c2r()
+    print(c2r.values[0])
+    rho       = rho.r2c()
+    
+
     #set zero mode to zero
     rho.csetitem([0, 0, 0], 0)
+
     if params['logging']:
         logging.info('simulations starts')
     # weak lensing simulation object
