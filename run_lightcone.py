@@ -120,17 +120,18 @@ def main(argv):
     for ii in range(FLAGS.N_maps):
         if rank==0:
             print('progress in percent:', ii/params['N_maps']*100)
+        
         kmaps, vjp, jvp, pm = run_wl_sim(params,cosmo=cosmo, num=ii)
-
         for jj,z_source in enumerate(params['zs_source']):
             kmap    = kmaps[jj]
             mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
             save_2Dmap(kmap,mapfile)
 
             if params['jvp']:
-                kmap    = jvp[jj]
+                kmap = jvp[jj]
+                kmap = np.concatenate(pm.comm.allgather(np.array(kmap.ravel())))
                 mapfile = os.path.join(dirs['maps'],'jvp_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
-                save_2Dmap(kmap,mapfile)
+                np.save(mapfile,kmap)
 
             if rank==0:
                 print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))

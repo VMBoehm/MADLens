@@ -589,7 +589,8 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
-    v = pm.create(type='real')
+    v = pm.create(type='real',value=0.)
+    print(v[0,0,0])
 
     if rank==0:
         v[0,0,0]=1.
@@ -605,7 +606,8 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         if params['jvp']:
             jvp      = tape.get_jvp()
             kmap_jvp = jvp.compute(init=dict(rho_=v), vout='kmaps_')
-
+            if rank==0:
+                print(kmap_jvp)
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
 
