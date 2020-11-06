@@ -35,7 +35,7 @@ flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshot
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
 flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
-flags.DEFINE_boolean('vjp', True,'whether to compute the vjp')
+flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', True, 'whether to compute the jvp')
 flags.DEFINE_boolean('forward',True, 'whether to run forward model')
 flags.DEFINE_boolean('analyze',False, 'whether to print out resource usage')
@@ -120,12 +120,18 @@ def main(argv):
     for ii in range(FLAGS.N_maps):
         if rank==0:
             print('progress in percent:', ii/params['N_maps']*100)
-        kmaps, kmaps_deriv, pm = run_wl_sim(params,cosmo=cosmo, num=ii)
+        kmaps, vjp, jvp, pm = run_wl_sim(params,cosmo=cosmo, num=ii)
 
         for jj,z_source in enumerate(params['zs_source']):
             kmap    = kmaps[jj]
             mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
             save_2Dmap(kmap,mapfile)
+
+            if params['jvp']:
+                kmap    = jvp[jj]
+                mapfile = os.path.join(dirs['maps'],'jvp_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
+                save_2Dmap(kmap,mapfile)
+
             if rank==0:
                 print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))
             

@@ -98,8 +98,8 @@ class list_put:
         deriv[i] = 0
         deriv_   = np.zeros(len_x)
         deriv_[i]= 1
-        elem_    = np.asarray(elem_,dtype=object)
-        e        = np.asarray([elem_ for ii in range(len_x)],dtype=object)
+        elem_    = np.asarray(elem_)
+        e        = np.asarray([elem_ for ii in range(len_x)])
         y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('i,i...->i...',deriv_,e)
         y_       = mod_list(y_)
         return dict(y_=y_)
@@ -589,10 +589,10 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
-    #v = pm.create(type='real')
+    v = pm.create(type='real')
 
-    #if rank==0:
-    #    v[0,0,0]=1.
+    if rank==0:
+        v[0,0,0]=1.
 
     # results
     kmap_vjp,kmap_jvp = [None, None]
@@ -604,9 +604,9 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
             kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout='_rho')
         if params['jvp']:
             jvp      = tape.get_jvp()
-            kmap_jvp = jvp.compute(init=dict(rho_=rho), vout='kmaps_')
+            kmap_jvp = jvp.compute(init=dict(rho_=v), vout='kmaps_')
 
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
 
-    return kmaps, [kmap_vjp,kmap_jvp], pm
+    return kmaps, kmap_vjp, kmap_jvp, pm
