@@ -590,7 +590,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         model     = wlsim.run.build()
 
     v = pm.create(type='real',value=0.)
-    print(v[0,0,0])
 
     if rank==0:
         v[0,0,0]=1.
