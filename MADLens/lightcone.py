@@ -486,7 +486,7 @@ class WLSimulation(FastPMSimulation):
         
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
-        for ai, af in zip(stages[:-1], stages[:-2]):
+        for ai, af in zip(stages[:-1], stages[1:]):
             if self.params['logging']:   
                 self.logger.info('fastpm step, %d'%jj)
             # central scale factor

@@ -128,6 +128,13 @@ def main(argv):
             save_2Dmap(kmap,mapfile)
             if rank==0:
                 print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))
+
+            if params['jvp']:
+                kmap = jvp[jj]
+                kmap = np.concatenate(pm.comm.allgather(np.array(kmap.ravel())))
+                mapfile = os.path.join(dirs['maps'],'jvp_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
+                np.save(mapfile,kmap)
+
             
     end = time.time()
     if rank==0:
