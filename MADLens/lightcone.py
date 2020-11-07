@@ -568,15 +568,22 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     rhok      = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
     rhok      = rhok.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
 
-    rho       = rhok.c2r()
-    if rank == 0:
-        print(rho.value[0,0,0])
-        rho.value[0,0,0]=rho.value[0,0,0]-1e-1
-        #rho.value[1,0,0]=rho.value[0,0,0]+1e-5
-    rho       = rho.r2c()
 
     #set zero mode to zero
     rhok.csetitem([0, 0, 0], 0)
+
+    rho       = rhok.c2r()
+
+    delta = 1e-4
+
+    delta_marg = delta/(np.prod(params['Nmesh'])-1)
+    if rank == 0:
+        print(rho.value[0,0,0])
+        rho = rho+delta_marg
+        rho.value[0,0,0] = rho.value[0,0,0]-delta-delta_marg
+    print(rho.value[0,0,0])
+    rho       = rho.r2c()
+
 
     rho = rhok.c2r()
 
