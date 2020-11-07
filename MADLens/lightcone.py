@@ -575,7 +575,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     rho       = rhok.c2r()
 
     delta = 1e-4
-#
     delta_marg = delta/(np.prod(params['Nmesh'])-1)
 #    if rank == 0:
 #        print(rho.value[0,0,0])
