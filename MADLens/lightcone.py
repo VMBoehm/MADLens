@@ -570,7 +570,8 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
 
     rho       = rhok.c2r()
     if rank == 0:
-        rho.value[0,0,0]=rho.value[0,0,0]+1e-5
+        print(rho.value[0,0,0])
+        rho.value[0,0,0]=rho.value[0,0,0]-1e-1
         #rho.value[1,0,0]=rho.value[0,0,0]+1e-5
     rho       = rho.r2c()
 
