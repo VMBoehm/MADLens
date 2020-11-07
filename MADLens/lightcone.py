@@ -579,13 +579,13 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     delta_marg = delta/(np.prod(params['Nmesh'])-1)
     if rank == 0:
         print(rho.value[0,0,0])
-        rho = rho+delta_marg
-        rho.value[0,0,0] = rho.value[0,0,0]-delta-delta_marg
+        rho = rho-delta_marg
+        rho.value[0,0,0] = rho.value[0,0,0]+delta+delta_marg
     print(rho.value[0,0,0])
-    rho       = rho.r2c()
+    #rho       = rho.r2c()
 
 
-    rho = rhok.c2r()
+    #rho = rhok.c2r()
 
     if params['logging']:
         logging.info('simulations starts')
