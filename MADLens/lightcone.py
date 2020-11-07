@@ -575,17 +575,13 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     rho       = rhok.c2r()
 
     delta = 1e-4
-
+#
     delta_marg = delta/(np.prod(params['Nmesh'])-1)
-    if rank == 0:
-        print(rho.value[0,0,0])
-        rho = rho-delta_marg
-        rho.value[0,0,0] = rho.value[0,0,0]+delta+delta_marg
-    print(rho.value[0,0,0])
-    #rho       = rho.r2c()
-
-
-    #rho = rhok.c2r()
+#    if rank == 0:
+#        print(rho.value[0,0,0])
+#        rho = rho-delta_marg
+#        rho.value[0,0,0] = rho.value[0,0,0]+delta+delta_marg
+#    print(rho.value[0,0,0])
 
     if params['logging']:
         logging.info('simulations starts')
@@ -598,10 +594,10 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
-    v = pm.create(type='real',value=0.)
+    v = pm.create(type='real',value=2*delta_marg)
 
     if rank==0:
-        v[0,0,0]=1.
+        v[0,0,0]=2.*delta
 
     # results
     kmap_vjp,kmap_jvp = [None, None]
