@@ -39,7 +39,7 @@ flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', True, 'whether to compute the jvp')
 flags.DEFINE_boolean('forward',True, 'whether to run forward model')
 flags.DEFINE_boolean('analyze',False, 'whether to print out resource usage')
-flags.DEFINE_string('label', 'deriv_test_32_jvp', 'label of this run')
+flags.DEFINE_string('label', 'deriv_test_32b_jvp', 'label of this run')
 flags.DEFINE_boolean('logging', 'False', 'whether to log run or not')
 
 def main(argv):

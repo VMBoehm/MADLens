@@ -368,13 +368,14 @@ class WLSimulation(FastPMSimulation):
                 # projection
                 xy       = ((xy - self.pm.BoxSize[:2]* 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
                     
-                for ii, ds in enumerate(self.ds):
-                    w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                    kmap     = list_elem(kmaps,ii)
-                    kmap_    = self.makemap(xy, w*mask)*self.factor
-                    kmap     = linalg.add(kmap_,kmap)
-                    kmaps    = list_put(kmaps,kmap,ii)
+                # for ii, ds in enumerate(self.ds):
+                ds = self.ds[0]
+                w        = self.wlen(d,ds)
+                mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                #    kmap     = list_elem(kmaps,ii)
+                kmaps    = self.makemap(xy, w*mask)*self.factor
+                #kmap     = linalg.add(kmap_,kmap)
+                #    kmaps    = list_put(kmaps,kmap,ii)
          
         return kmaps
 
@@ -401,15 +402,16 @@ class WLSimulation(FastPMSimulation):
             
                 xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
 
-                for ii, ds in enumerate(self.ds):
-                    if self.params['logging']: 
-                        self.logger.info('projection, %d'%jj)
-                    w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                    kmap_    = self.makemap(xy, w*mask)*self.factor   
-                    kmap     = list_elem(kmaps,ii)
-                    kmap     = linalg.add(kmap_,kmap)
-                    kmaps    = list_put(kmaps,kmap,ii)
+                ds       = self.ds[0]
+#                for ii, ds in enumerate(self.ds):
+#                    if self.params['logging']: 
+#                        self.logger.info('projection, %d'%jj)
+                w        = self.wlen(d,ds)
+                mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                kmaps    = self.makemap(xy, w*mask)*self.factor   
+                #    kmap     = list_elem(kmaps,ii)
+                #    kmap     = linalg.add(kmap_,kmap)
+                #    kmaps    = list_put(kmaps,kmap,ii)
 
         return kmaps
             
@@ -428,8 +430,9 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers = []
-        kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
+        #kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
         
+        kmaps  = self.mappm.create('real', value=0.)
         f, potk= self.gravity(dx)
 
         for ai, af in zip(stages[:-1], stages[1:]):
@@ -483,7 +486,6 @@ class WLSimulation(FastPMSimulation):
 
         powers =[]
         kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
-        
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
         for ai, af in zip(stages[:-1], stages[1:]):
