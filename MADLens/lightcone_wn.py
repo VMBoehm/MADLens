@@ -383,7 +383,7 @@ class WLSimulation(FastPMSimulation):
         
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
 
-        #q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
+        q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
@@ -472,7 +472,7 @@ class WLSimulation(FastPMSimulation):
 
         stages = self.stages
 
-        q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
+        #q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
 
        
         powers = []
@@ -483,7 +483,7 @@ class WLSimulation(FastPMSimulation):
             # drift (update positions)   
  
             jj+=1
-
+            print(ai)
             kmaps = self.no_interp(kmaps, q, ai, af, jj)
 
 
