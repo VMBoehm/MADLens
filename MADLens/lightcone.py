@@ -409,7 +409,7 @@ class WLSimulation(FastPMSimulation):
 #                        self.logger.info('projection, %d'%jj)
                 w        = self.wlen(d,ds)
                 mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                kmaps    = self.makemap(xy, w*mask)*self.factor   
+                kmaps    = kmaps+self.makemap(xy, w*mask)*self.factor   
                 #    kmap     = list_elem(kmaps,ii)
                 #    kmap     = linalg.add(kmap_,kmap)
                 #    kmaps    = list_put(kmaps,kmap,ii)
@@ -486,7 +486,8 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers =[]
-        kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
+        #kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
+        kmaps  = self.mappm.create('real', value=0.)
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
         for ai, af in zip(stages[:-1], stages[1:]):
