@@ -341,8 +341,8 @@ class WLSimulation(FastPMSimulation):
         
         return map
 
-    @autooperator('dx,p,dx_PGD->kmaps')
-    def interp(self, dx, p, dx_PGD, ax, ap, ai, af):
+    @autooperator('dx,p,dx_PGD,kmaps->kmaps')
+    def interp(self, dx, p, dx_PGD,kmaps, ax, ap, ai, af):
 
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=float) - 1.)
 
@@ -373,7 +373,8 @@ class WLSimulation(FastPMSimulation):
                 w        = self.wlen(d,ds)
                 mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
                 #    kmap     = list_elem(kmaps,ii)
-                kmaps    = self.makemap(xy, w*mask)*self.factor
+                kmaps    = kmaps+self.makemap(xy, w*mask)*self.factor
+                #print(kmaps)
                 #kmap     = linalg.add(kmap_,kmap)
                 #    kmaps    = list_put(kmaps,kmap,ii)
          
@@ -432,7 +433,7 @@ class WLSimulation(FastPMSimulation):
         powers = []
         #kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
         
-        #kmaps  = self.mappm.create('real', value=0.)
+        kmaps  = self.mappm.create('real', value=0.)
         f, potk= self.gravity(dx)
 
         for ai, af in zip(stages[:-1], stages[1:]):
@@ -454,7 +455,7 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p , dx_PGD, ac, ac, ai, af)
+            kmaps = self.interp(dx, p , dx_PGD, kmaps, ac, ac, ai, af)
 
             # drift
             ddx = p * self.DriftFactor(ac, ac, af)
@@ -615,4 +616,4 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
 
-    return [kmaps], kmap_vjp, kmap_jvp, pm
+    return [kmaps], [kmap_vjp], [kmap_jvp], pm
