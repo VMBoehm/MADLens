@@ -341,8 +341,8 @@ class WLSimulation(FastPMSimulation):
         
         return map
 
-    @autooperator('dx,p, kmaps, dx_PGD->kmaps')
-    def interp(self, dx, p, kmaps, dx_PGD, ax, ap, ai, af):
+    @autooperator('dx,p,dx_PGD->kmaps')
+    def interp(self, dx, p, dx_PGD, ax, ap, ai, af):
 
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=float) - 1.)
 
@@ -379,7 +379,7 @@ class WLSimulation(FastPMSimulation):
          
         return kmaps
 
-    @autooperator('dx,p, kmaps, dx_PGD->kmaps')
+    @autooperator('dx,p,kmaps,dx_PGD->kmaps')
     def no_interp(self,dx,p,kmaps,dx_PGD,ai,af,jj):
         
         dx = dx + dx_PGD
@@ -401,7 +401,7 @@ class WLSimulation(FastPMSimulation):
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
                 xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
-
+    
                 ds       = self.ds[0]
 #                for ii, ds in enumerate(self.ds):
 #                    if self.params['logging']: 
@@ -432,7 +432,7 @@ class WLSimulation(FastPMSimulation):
         powers = []
         #kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
         
-        kmaps  = self.mappm.create('real', value=0.)
+        #kmaps  = self.mappm.create('real', value=0.)
         f, potk= self.gravity(dx)
 
         for ai, af in zip(stages[:-1], stages[1:]):
@@ -454,7 +454,7 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p, kmaps, dx_PGD, ac, ac, ai, af)
+            kmaps = self.interp(dx, p , dx_PGD, ac, ac, ai, af)
 
             # drift
             ddx = p * self.DriftFactor(ac, ac, af)
@@ -615,4 +615,4 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
 
-    return kmaps, kmap_vjp, kmap_jvp, pm
+    return [kmaps], kmap_vjp, kmap_jvp, pm
