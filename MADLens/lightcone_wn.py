@@ -379,11 +379,12 @@ class WLSimulation(FastPMSimulation):
         return kmaps
 
     @autooperator('kmaps->kmaps')
-    def no_interp(self,kmaps,q,ai,af,jj):
+    def no_interp(self,kmaps, ai,af,jj):
         
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
 
-        q      = np.random.random(self.q.shape)*self.pm.BoxSize[0]
+        rng  = np.random.RandomState(seed=self.pm.comm.rank)
+        q      = rng.random(self.q.shape)*self.pm.BoxSize[0]
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
@@ -484,7 +485,7 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
             print(ai)
-            kmaps = self.no_interp(kmaps, q, ai, af, jj)
+            kmaps = self.no_interp(kmaps, ai, af, jj)
 
 
         return kmaps

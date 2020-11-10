@@ -378,13 +378,14 @@ class WLSimulation(FastPMSimulation):
          
         return kmaps
 
-    @autooperator('dx,p, kmaps, dx_PGD->kmaps')
-    def no_interp(self,dx,p,kmaps,dx_PGD,ai,af,jj):
+    @autooperator('dx,p, dx_PGD->kmaps')
+    def no_interp(self,dx,p,dx_PGD,ai,af,jj):
         
         dx = dx + dx_PGD
 
         
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
+        kmaps = [None for ii in range(len(self.ds))]
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
@@ -400,16 +401,17 @@ class WLSimulation(FastPMSimulation):
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
                 xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
-
+                
                 for ii, ds in enumerate(self.ds):
                     if self.params['logging']: 
                         self.logger.info('projection, %d'%jj)
                     w        = self.wlen(d,ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor   
-                    kmap     = list_elem(kmaps,ii)
-                    kmap     = linalg.add(kmap_,kmap)
-                    kmaps    = list_put(kmaps,kmap,ii)
+                    #kmap     = list_elem(kmaps,ii)
+                    #kmap     = linalg.add(kmap_,kmap)
+                    #maps    = list_put(kmaps,kmap,ii)
+                    kmaps[ii] = kmap_ if kmaps[ii] is None else kmaps[ii]+kmap_ 
 
         return kmaps
             
@@ -482,7 +484,7 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers =[]
-        kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
+        kmaps  = [None for ds in self.ds]
         
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
@@ -519,7 +521,10 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
 
-            kmaps = self.no_interp(dx, p, kmaps, dx_PGD, ai, af, jj)
+            kmaps_ = self.no_interp(dx, p, kmaps, dx_PGD, ai, af, jj)
+
+            for ii in range(len(self.ds)):
+                kmaps[ii] = kmaps_[ii] if kmaps[ii] is None else kmaps[ii]+kmaps_[ii]
 
             # force (compute force)
             f, potk = self.gravity(dx)
