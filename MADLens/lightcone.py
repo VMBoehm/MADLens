@@ -430,7 +430,6 @@ class WLSimulation(FastPMSimulation):
         q      = self.q
         Om0    = pt.Om0
 
-        powers = []
         kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
         
         f, potk= self.gravity(dx)
@@ -484,7 +483,6 @@ class WLSimulation(FastPMSimulation):
         q      = self.q
         Om0    = pt.Om0
 
-        powers =[]
         kmaps  = [None for ds in self.ds]
         
         f, potk= self.gravity(dx)
@@ -522,19 +520,26 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
 
-            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj,kmaps=ListPlaceholder(len(self.ds)))
-
+            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj, kmaps=ListPlaceholder(len(self.ds)))
+            
             for ii in range(len(self.ds)):
-                kmaps[ii] = kmaps_[ii] if kmaps[ii] is None else kmaps[ii]+kmaps_[ii]
+                if kmaps[ii] is None:
+                    print('here')
+                    kmaps[ii] = kmaps_[ii]
+                else:
+                    print('sum')
+                    kmaps[ii] = kmaps[ii]+kmaps_[ii]
 
+            print('done %f'%af)
             # force (compute force)
             f, potk = self.gravity(dx)
 
             # kick (update momentum)
             dp = f * (self.KickFactor(ac, af, af) * 1.5 * Om0)
             p  = p + dp
+            print('in loop', kmaps)
 
-
+        print('out of loop', kmaps)
         return kmaps
 
 
@@ -590,6 +595,9 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, logger=a_logger)
 
     #build
+    if rank == 0:
+        print('building graph...')
+
     if params['interpolate']:
         model     = wlsim.run_interpolated.build()
     else:
@@ -603,6 +611,9 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     # results
     kmap_vjp,kmap_jvp = [None, None]
     # compute
+    if rank ==0:
+        print('computing...')
+
     if params['forward'] and (params['vjp'] or params['jvp']):
         kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho),return_tape=True)
         if params['vjp']:
@@ -613,5 +624,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
             kmap_jvp = jvp.compute(init=dict(rho_=v), vout='kmaps_')
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
+        print(kmaps)
 
     return kmaps, kmap_vjp, kmap_jvp, pm
