@@ -1,6 +1,6 @@
 from vmad import autooperator, operator
 from vmad.core import stdlib
-from vmad.core.symbol import Symbol, List
+from vmad.core.symbol import ListPlaceholder
 from vmad.lib import fastpm
 from vmad.lib import linalg
 from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
@@ -522,7 +522,7 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
 
-            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj,kmaps=[Symbol("kmaps-%d"%i) for i in range(len(self.ds))])
+            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj,kmaps=ListPlaceholder(len(self.ds)))
 
             for ii in range(len(self.ds)):
                 kmaps[ii] = kmaps_[ii] if kmaps[ii] is None else kmaps[ii]+kmaps_[ii]
