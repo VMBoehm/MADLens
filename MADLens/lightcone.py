@@ -1,5 +1,6 @@
 from vmad import autooperator, operator
 from vmad.core import stdlib
+from vmad.core.symbol import Literal, ListPlaceholder
 from vmad.lib import fastpm
 from vmad.lib import linalg
 from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
@@ -341,10 +342,13 @@ class WLSimulation(FastPMSimulation):
         
         return map
 
-    @autooperator('dx,p,dx_PGD,kmaps->kmaps')
-    def interp(self, dx, p, dx_PGD,kmaps, ax, ap, ai, af):
+    @autooperator('dx,p,dx_PGD->kmaps')
+    def interp(self, dx, p, dx_PGD, ax, ap, ai, af):
 
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=float) - 1.)
+
+        zero_map = Literal(self.mappm.create('real',value=0.)) 
+        kmaps = [zero_map for ii in range(len(self.ds))]
 
         for M in self.imgen.generate(di, df):
             # if lower end of box further away than source -> do nothing
@@ -368,25 +372,25 @@ class WLSimulation(FastPMSimulation):
                 # projection
                 xy       = ((xy - self.pm.BoxSize[:2]* 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
                     
-                # for ii, ds in enumerate(self.ds):
-                ds = self.ds[0]
-                w        = self.wlen(d,ds)
-                mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                #    kmap     = list_elem(kmaps,ii)
-                kmaps    = kmaps+self.makemap(xy, w*mask)*self.factor
-                #print(kmaps)
-                #kmap     = linalg.add(kmap_,kmap)
-                #    kmaps    = list_put(kmaps,kmap,ii)
-         
+                for ii, ds in enumerate(self.ds):
+                    w        = self.wlen(d,ds)
+                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    kmap_    = self.makemap(xy, w*mask)*self.factor   
+                    kmaps[ii] = kmaps[ii]+kmap_ 
+
+
         return kmaps
 
-    @autooperator('dx,p,kmaps,dx_PGD->kmaps')
-    def no_interp(self,dx,p,kmaps,dx_PGD,ai,af,jj):
+    @autooperator('dx,p, dx_PGD->kmaps')
+    def no_interp(self,dx,p,dx_PGD,ai,af,jj):
         
         dx = dx + dx_PGD
 
         
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
+        
+        zero_map = Literal(self.mappm.create('real',value=0.)) 
+        kmaps = [zero_map for ii in range(len(self.ds))]
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
@@ -402,17 +406,14 @@ class WLSimulation(FastPMSimulation):
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
                 xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
-    
-                ds       = self.ds[0]
-#                for ii, ds in enumerate(self.ds):
-#                    if self.params['logging']: 
-#                        self.logger.info('projection, %d'%jj)
-                w        = self.wlen(d,ds)
-                mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                kmaps    = kmaps+self.makemap(xy, w*mask)*self.factor   
-                #    kmap     = list_elem(kmaps,ii)
-                #    kmap     = linalg.add(kmap_,kmap)
-                #    kmaps    = list_put(kmaps,kmap,ii)
+                
+                for ii, ds in enumerate(self.ds):
+                    if self.params['logging']: 
+                        self.logger.info('projection, %d'%jj)
+                    w        = self.wlen(d,ds)
+                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    kmap_    = self.makemap(xy, w*mask)*self.factor   
+                    kmaps[ii] = kmaps[ii]+kmap_ 
 
         return kmaps
             
@@ -431,9 +432,10 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers = []
-        #kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
-        
-        kmaps  = self.mappm.create('real', value=0.)
+
+        zero_map = Literal(self.mappm.create('real', value=0.))
+        kmaps  = [zero_map for ds in self.ds]
+
         f, potk= self.gravity(dx)
 
         for ai, af in zip(stages[:-1], stages[1:]):
@@ -455,7 +457,10 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p , dx_PGD, kmaps, ac, ac, ai, af)
+            kmaps = self.interp(dx, p , dx_PGD, ac, ac, ai, af,kmaps=ListPlaceholder(len(self.ds)))
+
+            for ii in range(len(self.ds)):
+                kmaps[ii] = kmaps[ii]+kmaps_[ii]
 
             # drift
             ddx = p * self.DriftFactor(ac, ac, af)
@@ -485,9 +490,9 @@ class WLSimulation(FastPMSimulation):
         q      = self.q
         Om0    = pt.Om0
 
-        powers =[]
-        #kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
-        kmaps  = self.mappm.create('real', value=0.)
+        zero_map = Literal(self.mappm.create('real', value=0.))
+        kmaps  = [zero_map for ds in self.ds]
+        
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
         for ai, af in zip(stages[:-1], stages[1:]):
@@ -523,7 +528,10 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
 
-            kmaps = self.no_interp(dx, p, kmaps, dx_PGD, ai, af, jj)
+            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj, kmaps=ListPlaceholder(len(self.ds)))#[Symbol('kmaps-%d-%d'%(ii,jj)) for ii in range(len(self.ds))])
+            
+            for ii in range(len(self.ds)):
+                kmaps[ii] = kmaps[ii]+kmaps_[ii]
 
             # force (compute force)
             f, potk = self.gravity(dx)
@@ -617,4 +625,4 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
 
-    return [kmaps], [kmap_vjp], [kmap_jvp], pm
+    return kmaps, kmap_vjp, kmap_jvp, pm
