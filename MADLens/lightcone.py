@@ -1,6 +1,6 @@
 from vmad import autooperator, operator
 from vmad.core import stdlib
-from vmad.core.symbol import ListPlaceholder
+from vmad.core.symbol import Symbol, Literal, ListPlaceholder
 from vmad.lib import fastpm
 from vmad.lib import linalg
 from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
@@ -386,7 +386,9 @@ class WLSimulation(FastPMSimulation):
 
         
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
-        kmaps = [None for ii in range(len(self.ds))]
+        
+        zero_map = Literal(self.mappm.create('real',value=0.)) 
+        kmaps = [zero_map for ii in range(len(self.ds))]
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
@@ -412,7 +414,7 @@ class WLSimulation(FastPMSimulation):
                     #kmap     = list_elem(kmaps,ii)
                     #kmap     = linalg.add(kmap_,kmap)
                     #maps    = list_put(kmaps,kmap,ii)
-                    kmaps[ii] = kmap_ if kmaps[ii] is None else kmaps[ii]+kmap_ 
+                    kmaps[ii] = kmaps[ii]+kmap_ 
 
         return kmaps
             
@@ -483,7 +485,8 @@ class WLSimulation(FastPMSimulation):
         q      = self.q
         Om0    = pt.Om0
 
-        kmaps  = [None for ds in self.ds]
+        zero_map = Literal(self.mappm.create('real', value=0.))
+        kmaps  = [zero_map for ds in self.ds]
         
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
@@ -520,15 +523,10 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
 
-            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj, kmaps=ListPlaceholder(len(self.ds)))
+            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj, kmaps=ListPlaceholder(len(self.ds)))#[Symbol('kmaps-%d-%d'%(ii,jj)) for ii in range(len(self.ds))])
             
             for ii in range(len(self.ds)):
-                if kmaps[ii] is None:
-                    print('here')
-                    kmaps[ii] = kmaps_[ii]
-                else:
-                    print('sum')
-                    kmaps[ii] = kmaps[ii]+kmaps_[ii]
+                kmaps[ii] = kmaps[ii]+kmaps_[ii]
 
             print('done %f'%af)
             # force (compute force)
