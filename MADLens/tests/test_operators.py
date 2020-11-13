@@ -288,3 +288,11 @@ class Test_reshape(BaseVectorTest):
         result = self.a*linalg.broadcast_to(linalg.reshape(x,(5,1)),(5,2))
         return result
 
+class Test_chi_z(BaseVectorTest):
+    redshift = .1
+    x = numpy.array([Planck15.Omega0_m])
+    y = Planck15.comoving_distance(redshift)
+    def model(self, x):
+        x = linalg.take(x=x, axis=0, i=0)
+        chi = lightcone.chi_z(Omega0_m=x, z=self.redshift, cosmo=Planck15)
+        return chi
