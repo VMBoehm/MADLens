@@ -1,5 +1,6 @@
 from vmad import autooperator, operator
 from vmad.core import stdlib
+from vmad.core.symbol import Literal, ListPlaceholder
 from vmad.lib import fastpm
 from vmad.lib import linalg
 from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
@@ -341,10 +342,13 @@ class WLSimulation(FastPMSimulation):
         
         return map
 
-    @autooperator('dx,p, kmaps, dx_PGD->kmaps')
-    def interp(self, dx, p, kmaps, dx_PGD, ax, ap, ai, af):
+    @autooperator('dx,p,dx_PGD->kmaps')
+    def interp(self, dx, p, dx_PGD, ax, ap, ai, af):
 
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=float) - 1.)
+
+        zero_map = Literal(self.mappm.create('real',value=0.)) 
+        kmaps = [zero_map for ii in range(len(self.ds))]
 
         for M in self.imgen.generate(di, df):
             # if lower end of box further away than source -> do nothing
@@ -370,21 +374,23 @@ class WLSimulation(FastPMSimulation):
                     
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
-                    kmap     = list_elem(kmaps,ii)
-                    kmap_    = self.makemap(xy, w*mask)*self.factor
-                    kmap     = linalg.add(kmap_,kmap)
-                    kmaps    = list_put(kmaps,kmap,ii)
-         
+                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    kmap_    = self.makemap(xy, w*mask)*self.factor   
+                    kmaps[ii] = kmaps[ii]+kmap_ 
+
+
         return kmaps
 
-    @autooperator('dx,p, kmaps, dx_PGD->kmaps')
-    def no_interp(self,dx,p,kmaps,dx_PGD,ai,af,jj):
+    @autooperator('dx,p, dx_PGD->kmaps')
+    def no_interp(self,dx,p,dx_PGD,ai,af,jj):
         
         dx = dx + dx_PGD
 
         
         di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
+        
+        zero_map = Literal(self.mappm.create('real',value=0.)) 
+        kmaps = [zero_map for ii in range(len(self.ds))]
 
         for M in self.imgen.generate(di, df):
                 # if lower end of box further away than source -> do nothing
@@ -407,9 +413,7 @@ class WLSimulation(FastPMSimulation):
                     w        = self.wlen(d,ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor   
-                    kmap     = list_elem(kmaps,ii)
-                    kmap     = linalg.add(kmap_,kmap)
-                    kmaps    = list_put(kmaps,kmap,ii)
+                    kmaps[ii] = kmaps[ii]+kmap_ 
 
         return kmaps
             
@@ -428,8 +432,10 @@ class WLSimulation(FastPMSimulation):
         Om0    = pt.Om0
 
         powers = []
-        kmaps  = [self.mappm.create('real', value=0.) for ii in range(len(self.ds))]
-        
+
+        zero_map = Literal(self.mappm.create('real', value=0.))
+        kmaps  = [zero_map for ds in self.ds]
+
         f, potk= self.gravity(dx)
 
         for ai, af in zip(stages[:-1], stages[1:]):
@@ -451,7 +457,10 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p, kmaps, dx_PGD, ac, ac, ai, af)
+            kmaps = self.interp(dx, p , dx_PGD, ac, ac, ai, af,kmaps=ListPlaceholder(len(self.ds)))
+
+            for ii in range(len(self.ds)):
+                kmaps[ii] = kmaps[ii]+kmaps_[ii]
 
             # drift
             ddx = p * self.DriftFactor(ac, ac, af)
@@ -481,8 +490,8 @@ class WLSimulation(FastPMSimulation):
         q      = self.q
         Om0    = pt.Om0
 
-        powers =[]
-        kmaps  = [self.mappm.create('real', value=0.) for ds in self.ds]
+        zero_map = Literal(self.mappm.create('real', value=0.))
+        kmaps  = [zero_map for ds in self.ds]
         
         f, potk= self.gravity(dx)
         jj = 0 #counting steps for saving snapshots
@@ -519,7 +528,10 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
 
-            kmaps = self.no_interp(dx, p, kmaps, dx_PGD, ai, af, jj)
+            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj, kmaps=ListPlaceholder(len(self.ds)))#[Symbol('kmaps-%d-%d'%(ii,jj)) for ii in range(len(self.ds))])
+            
+            for ii in range(len(self.ds)):
+                kmaps[ii] = kmaps[ii]+kmaps_[ii]
 
             # force (compute force)
             f, potk = self.gravity(dx)
