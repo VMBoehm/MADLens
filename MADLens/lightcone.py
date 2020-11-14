@@ -20,6 +20,23 @@ import resource
 import logging
 import sys
 
+def get_kedges(x1):
+    dk = 2*np.pi/min(x1.BoxSize)**2
+    kmin= dk
+    kedges = np.arange(kmin, np.pi*min(x1.Nmesh)/max(x1.BoxSize) + dk/2, dk)
+    kedges  = np.append(kedges,2*np.pi*min(x1.Nmesh)/max(x1.BoxSize)+dk)
+    kedges  = np.insert(kedges,0,0)
+    one     = x1.pm.create(type(x1), value=1).apply(x1._expand_hermitian, kind='index', out=Ellipsis)
+    ind     = np.zeros(x1.value.shape, dtype='intp')
+    ind     = x1.apply(lambda k, v: np.digitize(k.normp(2) ** 0.5, kedges), out=ind)
+    N       = np.bincount(ind.flat, weights=one.real.flat, minlength=len(kedges+1))
+    N       = x1.pm.comm.allreduce(N)
+    mask    = np.where(N!=0)
+    N       = N[mask]
+    kedges  = kedges[mask]
+    ks      = (kedges[0:-1]+kedges[1:])/2
+    return kedges,ks
+
 def BinarySearch_Left(mylist, items):
     print(mylist, items)
     "finds where to insert elements into a sorted array, this is the equivalent of numpy.searchsorted"
@@ -265,7 +282,7 @@ class ImageGenerator:
     
     
 class WLSimulation(FastPMSimulation):
-    def __init__(self, stages, cosmology, pm, params, boxsize2D, logger):
+    def __init__(self, stages, cosmology, pm, params, boxsize2D, ks, kedges, logger):
         """
         stages:    1d array of floats. scale factors at which to evaluate fastpm simulation (fastpm steps)
         cosmology: nbodykit cosmology object
@@ -289,6 +306,9 @@ class WLSimulation(FastPMSimulation):
         chis           = cosmology.comoving_distance(z_int) #Mpc/h
         self.z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind='linear', bounds_error=False, fill_value='extrapolate')
         
+        self.ks = np.array(ks)
+        self.kedges=np.array(kedges)
+
         #how many times to duplicate the box in x-y to span the observed area (probably not desired for machine learning!)
         self.vert_num  = (max(boxsize2D)*max(self.ds))/pm.BoxSize[-1]
         if pm.comm.rank==0:
@@ -475,7 +495,6 @@ class WLSimulation(FastPMSimulation):
             ddx = p * self.DriftFactor(ai, ac, ac)
             dx  = dx + ddx
 
-            stdlib.watchpoint(dx, lambda dx: print(dx.shape))
             if self.params['PGD']:
                 alpha    = self.alpha0 * ac **self.mu
                 dx_PGD   = PGD.PGD_correction(self.q + dx, alpha, self.kl, self.ks, self.fpm, self.q)
@@ -508,7 +527,6 @@ class WLSimulation(FastPMSimulation):
     @autooperator('rho, Om0->kmaps')
     def run(self, rho, Om0):
         
-        print(self.ks)
         rhok = fastpm.r2c(rho)
         norm = normalize(8, self.cosmo.Omega0_m, 'EH')
         norm = (self.cosmo.sigma8/norm)**2
@@ -520,6 +538,7 @@ class WLSimulation(FastPMSimulation):
         pt     = self.pt
         stages = self.stages
         q      = self.q
+
         zero_map = Literal(self.mappm.create('real', value=0.))
         kmaps  = [zero_map for ds in self.ds]
         
@@ -538,6 +557,7 @@ class WLSimulation(FastPMSimulation):
             # drift (update positions)
             ddx = p * self.DriftFactor(ai, ac, af)
             dx  = dx + ddx
+
             if self.params['PGD']:
                 alpha    = self.alpha0*af**self.mu
                 dx_PGD   = PGD.PGD_correction(q+dx, alpha, self.kl, self.ks, self.fpm,q)
@@ -616,11 +636,12 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     #set zero mode to zero
     rhok.csetitem([0, 0, 0], 0)
 
+    kedges, ks = get_kedges(rhok)
     rho = rhok.c2r()
     if params['logging']:
         logging.info('simulations starts')
     # weak lensing simulation object
-    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, logger=a_logger)
+    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, ks=ks, kedges=kedges, logger=a_logger)
 
     #build
     if params['interpolate']:
