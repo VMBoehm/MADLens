@@ -282,7 +282,7 @@ class ImageGenerator:
     
     
 class WLSimulation(FastPMSimulation):
-    def __init__(self, stages, cosmology, pm, params, boxsize2D, ks, kedges, logger):
+    def __init__(self, stages, cosmology, pm, params, boxsize2D, k_s, kedges, logger):
         """
         stages:    1d array of floats. scale factors at which to evaluate fastpm simulation (fastpm steps)
         cosmology: nbodykit cosmology object
@@ -306,7 +306,7 @@ class WLSimulation(FastPMSimulation):
         chis           = cosmology.comoving_distance(z_int) #Mpc/h
         self.z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind='linear', bounds_error=False, fill_value='extrapolate')
         
-        self.ks = np.array(ks)
+        self.k_s = np.array(k_s)
         self.kedges=np.array(kedges)
 
         #how many times to duplicate the box in x-y to span the observed area (probably not desired for machine learning!)
@@ -468,8 +468,8 @@ class WLSimulation(FastPMSimulation):
         rhok = fastpm.r2c(rho)
         norm = normalize(8, self.cosmo.Omega0_m, 'EH')
         norm = (self.cosmo.sigma8/norm)**2
-        transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.ks)**.5*norm**.5/self.pm.BoxSize.prod()**.5
-        digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.ks)
+        transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.k_s)**.5*norm**.5/self.pm.BoxSize.prod()**.5
+        digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.k_s)
         rhok= fastpm.apply_digitized(x=rhok, tf=transfer, digitizer=digitizer, kind='wavenumber', mode='amplitude')
         dx, p  = self.firststep(rhok)
         pt     = self.pt
@@ -530,8 +530,8 @@ class WLSimulation(FastPMSimulation):
         rhok = fastpm.r2c(rho)
         norm = normalize(8, self.cosmo.Omega0_m, 'EH')
         norm = (self.cosmo.sigma8/norm)**2
-        transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.ks)**.5*norm**.5/self.pm.BoxSize.prod()**.5
-        digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.ks)
+        transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.k_s)**.5*norm**.5/self.pm.BoxSize.prod()**.5
+        digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.k_s)
         rhok= fastpm.apply_digitized(x=rhok, tf=transfer, digitizer=digitizer, kind='wavenumber', mode='amplitude')
         #stdlib.watchpoint(rhok, lambda rhok: print(rhok))
         dx, p  = self.firststep(rhok)
@@ -636,12 +636,12 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     #set zero mode to zero
     rhok.csetitem([0, 0, 0], 0)
 
-    kedges, ks = get_kedges(rhok)
+    kedges, k_s = get_kedges(rhok)
     rho = rhok.c2r()
     if params['logging']:
         logging.info('simulations starts')
     # weak lensing simulation object
-    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, ks=ks, kedges=kedges, logger=a_logger)
+    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, k_s=k_s, kedges=kedges, logger=a_logger)
 
     #build
     if params['interpolate']:
