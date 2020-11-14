@@ -383,7 +383,7 @@ class WLSimulation(FastPMSimulation):
         return map
 
     @autooperator('dx,Om0, p,dx_PGD->kmaps')
-    def interp(self, dx,Om0, p, dx_PGD, ax, ap, ai, af):
+    def interp(self, dx,Om0, p, dx_PGD, ax, ap, ai, af, FactoryCache):
 
         di_value, df_value = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
         di = chi_z(Om0, 1. /ai - 1., self.cosmo)
@@ -405,8 +405,10 @@ class WLSimulation(FastPMSimulation):
                 a_approx = 1. / (z_approx + 1.)
                 
                 # move particles to a_approx, then add PGD correction
-                
-                dx1      = dx + p*self.DriftFactor(a_approx, ax, ap)[:, None] + dx_PGD
+                drift = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, a_approx=a_approx, ax=ax, ap=ap:
+                                       fastpm.DriftFactor(Om0, support, FactoryCache, a_approx, ax, ap), epsilon=1e-2, mode='central')
+                drift = linalg.transpose(broadcast_to(drift,stdlib.eval(p, lambda p: p.T.shape)), None)
+                dx1      = dx + p*drift+ dx_PGD
 
                 # rotate their positions
                 xy, d    = self.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
@@ -476,6 +478,7 @@ class WLSimulation(FastPMSimulation):
         pt     = self.pt
         stages = self.stages
         q      = self.q
+        FactoryCache = fastpm.CosmologyFactory()
 
         powers = []
 
@@ -489,11 +492,16 @@ class WLSimulation(FastPMSimulation):
             ac = (ai * af) ** 0.5
 
             # kick
-            dp = f * (self.KickFactor(ai, ai, ac) * 1.5 * Om0)
+            kick = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
+                                   fastpm.KickFactor(Om0, support, FactoryCache, ai, ai, ac), epsilon=1e-2, mode='central')
+            kick = broadcast_to(kick * 1.5 * Om0,stdlib.eval(f, lambda f: f.shape))
+            dp = f *kick
             p  = p + dp
 
             # drift
-            ddx = p * self.DriftFactor(ai, ac, ac)
+            drift = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
+                                   fastpm.DriftFactor(Om0, support, FactoryCache, ai, ac, ac), epsilon=1e-2, mode='central')
+            ddx = p * drift
             dx  = dx + ddx
 
             if self.params['PGD']:
@@ -503,20 +511,25 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps_ = self.interp(dx, Om0, p , dx_PGD, ac, ac, ai, af,kmaps=ListPlaceholder(len(self.ds)))
+            kmaps_ = self.interp(dx, Om0, p , dx_PGD, ac, ac, ai, af,FactoryCache, kmaps=ListPlaceholder(len(self.ds)))
 
             for ii in range(len(self.ds)):
                 kmaps[ii] = kmaps[ii]+kmaps_[ii]
 
             # drift
-            ddx = p * self.DriftFactor(ac, ac, af)
+            drift = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
+                                   fastpm.DriftFactor(Om0, support, FactoryCache, ac, ac, af), epsilon=1e-2, mode='central')
+            ddx = p * drift
             dx  = dx + ddx
 
             # force
             f, potk = self.gravity(dx)
 
             # kick
-            dp = f * (self.KickFactor(ac, af, af) * 1.5 * Om0)
+            kick = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
+                                   fastpm.KickFactor(Om0, support, FactoryCache, ac, af, af), epsilon=1e-2, mode='central')
+            kick = broadcast_to(kick * 1.5 * Om0,stdlib.eval(f, lambda f: f.shape))
+            dp = f * kick
             p  = p + dp
         
         
