@@ -562,7 +562,9 @@ class WLSimulation(FastPMSimulation):
             p  = p + dp
 
             # drift (update positions)
-            ddx = p * self.DriftFactor(ai, ac, af)
+            drift = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
+                                   fastpm.DriftFactor(Om0, support, FactoryCache, ai, ac, af), epsilon=1e-2, mode='central')
+            ddx = p * drift
             dx  = dx + ddx
 
             if self.params['PGD']:
@@ -593,7 +595,10 @@ class WLSimulation(FastPMSimulation):
             f, potk = self.gravity(dx)
 
             # kick (update momentum)
-            dp = f * (self.KickFactor(ac, af, af) * 1.5 * Om0)
+            kick = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
+                                   fastpm.KickFactor(Om0, support, FactoryCache, ac, af, af), epsilon=1e-2, mode='central')
+            kick = broadcast_to(kick * 1.5 * Om0,stdlib.eval(f, lambda f: f.shape))
+            dp = f * kick
             p  = p + dp
 
 
