@@ -465,15 +465,20 @@ class WLSimulation(FastPMSimulation):
 
 
 
-    @autooperator('rho, Om0->kmaps')
-    def run_interpolated(self, rho, Om0):
+    @autooperator('rho, Om0, sigma8->kmaps')
+    def run_interpolated(self, rho, Om0, sigma8):
 
         rhok = fastpm.r2c(rho)
-        norm = normalize(8, self.cosmo.Omega0_m, 'EH')
-        norm = (self.cosmo.sigma8/norm)**2
+
+        # Calculate EH power for initial modes
+        norm = finite_operator(Om0, lambda Om0, R=8, tf='EH': normalize(R, Om0, tf), epsilon=1e-5, mode='central')
+        norm = (sigma8/norm)**2
+        norm = broadcast_to(norm, self.k_s.shape)
         transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.k_s)**.5*norm**.5/self.pm.BoxSize.prod()**.5
         digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.k_s)
         rhok= fastpm.apply_digitized(x=rhok, tf=transfer, digitizer=digitizer, kind='wavenumber', mode='amplitude')
+
+
         dx, p  = self.firststep(rhok)
         pt     = self.pt
         stages = self.stages
@@ -538,14 +543,15 @@ class WLSimulation(FastPMSimulation):
 
     
 
-    @autooperator('rho, Om0->kmaps')
-    def run(self, rho, Om0):
+    @autooperator('rho, Om0, sigma8->kmaps')
+    def run(self, rho, Om0, sigma8):
             
         rhok = fastpm.r2c(rho)
 
         # Calculate EH power for initial modes
-        norm = normalize(8, self.cosmo.Omega0_m, 'EH')
-        norm = (self.cosmo.sigma8/norm)**2
+        norm = finite_operator(Om0, lambda Om0, R=8, tf='EH': normalize(R, Om0, tf), epsilon=1e-5, mode='central')
+        norm = (sigma8/norm)**2
+        norm = broadcast_to(norm, self.k_s.shape)
         transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.k_s)**.5*norm**.5/self.pm.BoxSize.prod()**.5
         digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.k_s)
         rhok= fastpm.apply_digitized(x=rhok, tf=transfer, digitizer=digitizer, kind='wavenumber', mode='amplitude')
@@ -683,14 +689,14 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     kmap_vjp,kmap_jvp = [None, None]
     # compute
     if params['forward'] and (params['vjp'] or params['jvp']):
-        kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m),return_tape=True)
+        kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m, sigma8=cosmo.sigma8),return_tape=True)
         if params['vjp']:
             vjp         = tape.get_vjp()
-            kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout=['_rho', '_Om0'])
+            kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout=['_rho', '_Om0', '_sigma8'])
         if params['jvp']:
             jvp      = tape.get_jvp()
-            kmap_jvp = jvp.compute(init=dict(rho_=v), vout=['kmaps_', 'Om0_'])
+            kmap_jvp = jvp.compute(init=dict(rho_=v, Om0_=cosmo.Omega0_m, sigma8_=cosmo.sigma8), vout=['kmaps_'])
     if params['forward']:
-        kmaps       = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m))
+        kmaps       = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m, sigma8=cosmo.sigma8))
 
     return kmaps, kmap_vjp, kmap_jvp, pm
