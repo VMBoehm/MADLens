@@ -105,25 +105,43 @@ class list_put:
         y_       = mod_list(y_)
         return dict(y_=y_)
 
+def deriv_integral(x, Omega0_m):
+    """
+    Derivative of the comoving distance integral with respect to matter density
+    """
+    #Create the denominator of the integral
+    E =(Omega0_m * ((1+x)**3 -1)+ 1)**(-3/2)
+    diriv_factor = (-1/2) * ((1+x)**3-1)
+
+    return E*diriv_factor
+
 @operator
 class chi_z:
     """
-    go from comsoving distance to redshift
+    Go from redshift to comoving distance
     """
-    ain  = {'z' : 'ndarray'}
-    aout = {'chi': 'ndarray'}
+    ain  = {'Omega0_m': 'float'}
+    aout = {'chi':'float'}
 
-    def apl(node, z, cosmo):
-        return dict(chi = cosmo.comoving_distance(z))
-    
-    def vjp(node, _chi, z, cosmo):
-        res = 1./cosmo.efunc(z)/cosmo.H0*cosmo.C
-        return dict(_z = numpy.multiply(res,_chi))
-    
-    def jvp(node, z_, z, cosmo):
-        res = 1./cosmo.efunc(z)/cosmo.H0*cosmo.C
-        return dict(chi_ = numpy.multiply(res,z_))
-    
+    def apl(node, Omega0_m, z, cosmo):
+        #Calculate the integral from 0->z
+        E         = lambda x: (Omega0_m  * ((1+x)**3 -1)+1)**(-1/2)
+        Dc , _    = scipy.integrate.quad(E, 0, z)
+        return dict(chi = Dc*cosmo.C/cosmo.H0)
+
+    def vjp(node, _chi, Omega0_m, z, cosmo):
+        #Return the derivative of the integral WR2 Omega0_m and mult by _chi
+        _Omega0_m  =  _chi  *  scipy.integrate.quad(deriv_integral, 0, z, args=Omega0_m)[0]
+
+        #Multiply by hubble distance and return
+        return dict(_Omega0_m = _Omega0_m*cosmo.C/cosmo.H0)
+
+    def jvp(node, Omega0_m_, Omega0_m, z, cosmo):
+        #Find derivative with respevct to omega_0 and mult by Omega0_m_
+        Omega0_m_   = Omega0_m_ * scipy.integrate.quad(deriv_integral, 0, z, args=Omega0_m)[0]
+
+        #Multiply by hubble distance
+        return dict(chi_ = Omega0_m_*cosmo.C/cosmo.H0)
     
 @operator
 class z_chi:
@@ -342,17 +360,19 @@ class WLSimulation(FastPMSimulation):
         
         return map
 
-    @autooperator('dx,p,dx_PGD->kmaps')
-    def interp(self, dx, p, dx_PGD, ax, ap, ai, af):
+    @autooperator('dx,Om0, p,dx_PGD->kmaps')
+    def interp(self, dx,Om0, p, dx_PGD, ax, ap, ai, af):
 
-        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=float) - 1.)
+        di_value, df_value = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+        di = chi_z(Om0, 1. /ai - 1., self.cosmo)
+        df = chi_z(Om0, 1. /af - 1., self.cosmo)
 
         zero_map = Literal(self.mappm.create('real',value=0.)) 
         kmaps = [zero_map for ii in range(len(self.ds))]
 
-        for M in self.imgen.generate(di, df):
+        for M in self.imgen.generate(di_value, df_value):
             # if lower end of box further away than source -> do nothing
-            if df>self.max_ds:
+            if df_value>self.max_ds:
                 continue
             else:
                 M, boxshift = M
@@ -374,27 +394,28 @@ class WLSimulation(FastPMSimulation):
                     
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    mask     = stdlib.eval([d, di, df], lambda args, ds=ds, d_approx=d_approx : 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0] <=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor   
                     kmaps[ii] = kmaps[ii]+kmap_ 
 
 
         return kmaps
 
-    @autooperator('dx,p, dx_PGD->kmaps')
-    def no_interp(self,dx,p,dx_PGD,ai,af,jj):
+    @autooperator('dx, Om0, p, dx_PGD->kmaps')
+    def no_interp(self,dx,Om0, p,dx_PGD,ai,af,jj):
         
         dx = dx + dx_PGD
 
-        
-        di, df = self.cosmo.comoving_distance(1. / numpy.array([ai, af],dtype=object) - 1.)
-        
+        di_value, df_value = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
+        di = chi_z(Om0, 1. /ai - 1., self.cosmo)
+        df = chi_z(Om0, 1. /af - 1., self.cosmo)
+
         zero_map = Literal(self.mappm.create('real',value=0.)) 
         kmaps = [zero_map for ii in range(len(self.ds))]
 
-        for M in self.imgen.generate(di, df):
+        for M in self.imgen.generate(di_value, df_value):
                 # if lower end of box further away than source -> do nothing
-            if df>self.max_ds:
+            if df_value>self.max_ds:
                 if self.params['logging']:
                     self.logger.info('imgen passed, %d'%jj)
                 continue
@@ -411,7 +432,7 @@ class WLSimulation(FastPMSimulation):
                     if self.params['logging']: 
                         self.logger.info('projection, %d'%jj)
                     w        = self.wlen(d,ds)
-                    mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx : 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
+                    mask     = stdlib.eval([d, di, df], lambda args, ds=ds, d_approx=d_approx : 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0] <=ds))
                     kmap_    = self.makemap(xy, w*mask)*self.factor   
                     kmaps[ii] = kmaps[ii]+kmap_ 
 
@@ -420,8 +441,8 @@ class WLSimulation(FastPMSimulation):
 
 
 
-    @autooperator('rho->kmaps')
-    def run_interpolated(self, rho):
+    @autooperator('rho, Om0->kmaps')
+    def run_interpolated(self, rho, Om0):
 
         rhok   = fastpm.r2c(rho)
 
@@ -429,7 +450,6 @@ class WLSimulation(FastPMSimulation):
         pt     = self.pt
         stages = self.stages
         q      = self.q
-        Om0    = pt.Om0
 
         powers = []
 
@@ -457,7 +477,7 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p , dx_PGD, ac, ac, ai, af,kmaps=ListPlaceholder(len(self.ds)))
+            kmaps_ = self.interp(dx, Om0, p , dx_PGD, ac, ac, ai, af,kmaps=ListPlaceholder(len(self.ds)))
 
             for ii in range(len(self.ds)):
                 kmaps[ii] = kmaps[ii]+kmaps_[ii]
@@ -479,8 +499,8 @@ class WLSimulation(FastPMSimulation):
 
     
 
-    @autooperator('rho->kmaps')
-    def run(self, rho):
+    @autooperator('rho, Om0->kmaps')
+    def run(self, rho, Om0):
         
         rhok   = fastpm.r2c(rho)
         
@@ -488,7 +508,6 @@ class WLSimulation(FastPMSimulation):
         pt     = self.pt
         stages = self.stages
         q      = self.q
-        Om0    = pt.Om0
 
         zero_map = Literal(self.mappm.create('real', value=0.))
         kmaps  = [zero_map for ds in self.ds]
@@ -528,7 +547,7 @@ class WLSimulation(FastPMSimulation):
  
             jj+=1
 
-            kmaps_ = self.no_interp(dx, p, dx_PGD, ai, af, jj, kmaps=ListPlaceholder(len(self.ds)))#[Symbol('kmaps-%d-%d'%(ii,jj)) for ii in range(len(self.ds))])
+            kmaps_ = self.no_interp(dx, Om0, p, dx_PGD, ai, af, jj, kmaps=ListPlaceholder(len(self.ds)))#[Symbol('kmaps-%d-%d'%(ii,jj)) for ii in range(len(self.ds))])
             
             for ii in range(len(self.ds)):
                 kmaps[ii] = kmaps[ii]+kmaps_[ii]
@@ -610,14 +629,14 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     kmap_vjp,kmap_jvp = [None, None]
     # compute
     if params['forward'] and (params['vjp'] or params['jvp']):
-        kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho),return_tape=True)
+        kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m),return_tape=True)
         if params['vjp']:
             vjp         = tape.get_vjp()
-            kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout='_rho')
+            kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout=['_rho', '_Om0'])
         if params['jvp']:
             jvp      = tape.get_jvp()
-            kmap_jvp = jvp.compute(init=dict(rho_=v), vout='kmaps_')
+            kmap_jvp = jvp.compute(init=dict(rho_=v), vout=['kmaps_', 'Om0_'])
     if params['forward']:
-        kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
+        kmaps       = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m))
 
     return kmaps, kmap_vjp, kmap_jvp, pm
