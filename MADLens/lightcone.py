@@ -11,6 +11,7 @@ from mpi4py import MPI
 import numpy as np
 import MADLens.PGD as PGD
 from MADLens.util import save_snapshot, save3Dpower
+from MADLens.power import get_Pk_EH, normalize
 from nbodykit.lab import FFTPower, ArrayCatalog
 import pickle
 import os
@@ -18,6 +19,23 @@ import errno
 import resource
 import logging
 import sys
+
+def get_kedges(x1):
+    dk = 2*np.pi/min(x1.BoxSize)**2
+    kmin= dk
+    kedges = np.arange(kmin, np.pi*min(x1.Nmesh)/max(x1.BoxSize) + dk/2, dk)
+    kedges  = np.append(kedges,2*np.pi*min(x1.Nmesh)/max(x1.BoxSize)+dk)
+    kedges  = np.insert(kedges,0,0)
+    one     = x1.pm.create(type(x1), value=1).apply(x1._expand_hermitian, kind='index', out=Ellipsis)
+    ind     = np.zeros(x1.value.shape, dtype='intp')
+    ind     = x1.apply(lambda k, v: np.digitize(k.normp(2) ** 0.5, kedges), out=ind)
+    N       = np.bincount(ind.flat, weights=one.real.flat, minlength=len(kedges+1))
+    N       = x1.pm.comm.allreduce(N)
+    mask    = np.where(N!=0)
+    N       = N[mask]
+    kedges  = kedges[mask]
+    ks      = (kedges[0:-1]+kedges[1:])/2
+    return kedges,ks
 
 def BinarySearch_Left(mylist, items):
     print(mylist, items)
@@ -264,7 +282,7 @@ class ImageGenerator:
     
     
 class WLSimulation(FastPMSimulation):
-    def __init__(self, stages, cosmology, pm, params, boxsize2D, logger):
+    def __init__(self, stages, cosmology, pm, params, boxsize2D, ks, kedges, logger):
         """
         stages:    1d array of floats. scale factors at which to evaluate fastpm simulation (fastpm steps)
         cosmology: nbodykit cosmology object
@@ -287,6 +305,9 @@ class WLSimulation(FastPMSimulation):
         z_int          = np.logspace(-12,np.log10(1500),40000)
         chis           = cosmology.comoving_distance(z_int) #Mpc/h
         self.z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind='linear', bounds_error=False, fill_value='extrapolate')
+        
+        self.ks = np.array(ks)
+        self.kedges=np.array(kedges)
 
         #how many times to duplicate the box in x-y to span the observed area (probably not desired for machine learning!)
         self.vert_num  = (max(boxsize2D)*max(self.ds))/pm.BoxSize[-1]
@@ -444,8 +465,12 @@ class WLSimulation(FastPMSimulation):
     @autooperator('rho, Om0->kmaps')
     def run_interpolated(self, rho, Om0):
 
-        rhok   = fastpm.r2c(rho)
-
+        rhok = fastpm.r2c(rho)
+        norm = normalize(8, self.cosmo.Omega0_m, 'EH')
+        norm = (self.cosmo.sigma8/norm)**2
+        transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.ks)**.5*norm**.5/self.pm.BoxSize.prod()**.5
+        digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.ks)
+        rhok= fastpm.apply_digitized(x=rhok, tf=transfer, digitizer=digitizer, kind='wavenumber', mode='amplitude')
         dx, p  = self.firststep(rhok)
         pt     = self.pt
         stages = self.stages
@@ -502,8 +527,13 @@ class WLSimulation(FastPMSimulation):
     @autooperator('rho, Om0->kmaps')
     def run(self, rho, Om0):
         
-        rhok   = fastpm.r2c(rho)
-        
+        rhok = fastpm.r2c(rho)
+        norm = normalize(8, self.cosmo.Omega0_m, 'EH')
+        norm = (self.cosmo.sigma8/norm)**2
+        transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.ks)**.5*norm**.5/self.pm.BoxSize.prod()**.5
+        digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.ks)
+        rhok= fastpm.apply_digitized(x=rhok, tf=transfer, digitizer=digitizer, kind='wavenumber', mode='amplitude')
+        #stdlib.watchpoint(rhok, lambda rhok: print(rhok))
         dx, p  = self.firststep(rhok)
         pt     = self.pt
         stages = self.stages
@@ -597,7 +627,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     # generate initial conditions
     cosmo     = cosmo.clone(P_k_max=30)
     rhok      = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
-    rhok      = rhok.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
 
     #rho       = rhok.c2r()
     #if rank == 0:
@@ -607,12 +636,12 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     #set zero mode to zero
     rhok.csetitem([0, 0, 0], 0)
 
+    kedges, ks = get_kedges(rhok)
     rho = rhok.c2r()
-
     if params['logging']:
         logging.info('simulations starts')
     # weak lensing simulation object
-    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, logger=a_logger)
+    wlsim     = WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, ks=ks, kedges=kedges, logger=a_logger)
 
     #build
     if params['interpolate']:
