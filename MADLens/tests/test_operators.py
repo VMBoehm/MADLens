@@ -111,7 +111,8 @@ def set_up():
     x         = pm.generate_uniform_particle_grid(shift=0.1)
     BoxSize2D = [deg/180.*np.pi for deg in params['BoxSize2D']]
     logger    = None
-    sim       = lightcone.WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, logger=None)
+    kedges, k_s= lightcone.get_kedges(pm.generate_whitenoise(seed=1993, unitary=False, type='complex'))
+    sim       = lightcone.WLSimulation(stages = numpy.linspace(0.1, 1.0, params['N_steps'], endpoint=True), cosmology=cosmo, pm=pm, boxsize2D=BoxSize2D, params=params, logger=None, k_s=k_s, kedges=kedges)
     kmaps = [sim.mappm.create('real', value=0.) for ii in range(1)]
 
     return pm, cosmo, x, kmaps, sim.DriftFactor, sim.mappm, sim
