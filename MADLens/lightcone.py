@@ -695,8 +695,9 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
             kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout=['_rho', '_Om0', '_sigma8'])
         if params['jvp']:
             jvp      = tape.get_jvp()
-            kmap_jvp = jvp.compute(init=dict(rho_=v, Om0_=cosmo.Omega0_m, sigma8_=cosmo.sigma8), vout=['kmaps_'])
+            kmap_jvp = jvp.compute(init=dict(rho_=v, Om0_=np.array([cosmo.Omega0_m]), sigma8_=np.array([cosmo.sigma8])), vout=['kmaps_'])
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m, sigma8=cosmo.sigma8))
-
+    import pdb
+    pdb.set_trace()
     return kmaps, kmap_vjp, kmap_jvp, pm
