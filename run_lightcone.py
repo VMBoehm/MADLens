@@ -101,7 +101,7 @@ def main(argv):
                     else:
                         num_run+=1
 
-        for result in ['cls','maps','snapshots']:
+        for result in ['cls','maps','snapshots', 'derivs']:
             dirs[result] = os.path.join(path_name,result)
             if not os.path.isdir(dirs[result]):
                 os.makedirs(dirs[result])
@@ -125,6 +125,9 @@ def main(argv):
         for jj,z_source in enumerate(params['zs_source']):
             kmap    = kmaps[jj]
             mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
+            if jvp:
+                jvp_mapfile = os.path.join(dirs['derivs'],'JVP_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
+                np.save(jvp_mapfile, jvp[0][0])
             save_2Dmap(kmap,mapfile)
             if rank==0:
                 print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))
