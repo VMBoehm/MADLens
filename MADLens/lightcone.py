@@ -78,15 +78,7 @@ class list_elem:
 
     def apl(node, x, i):
         elem = x[i]
-        x_shape = []
-        for xx in x:
-            if numpy.ndim(xx) !=0:
-                print(numpy.ndim(xx))
-                x_shape.append(numpy.shape(xx))
-            else:
-                x_shape.append((1))
-        #print([numpy.shape(xx) for xx in x])
-        return dict(elem=elem, x_shape=x_shape)
+        return dict(elem=elem, x_shape=[numpy.shape(xx) for xx in x])
 
     def vjp(node, _elem, x_shape, i):
         _x       = []
@@ -176,20 +168,25 @@ class z_chi:
     go from redshift to comoving distance 
     """
 
-    ain  = {'chi' : 'ndarray'}
+    ain  = {'chi' : 'ndarray', 'Om0':'*'}
     aout = {'z': 'ndarray'}
 
-    def apl(node, chi, cosmo, z_chi_int):
+    def apl(node, chi,Om0, cosmo, z_chi_int):
         return dict(z = z_chi_int(chi))
     
-    def vjp(node, _z, z, cosmo, z_chi_int):
+    def vjp(node, _z, Om0, z, cosmo, z_chi_int):
+        a = 1/z -1
         res = cosmo.efunc(z)*cosmo.H0/cosmo.C
-        return dict(_chi = res*_z)
+        res_o = (Om0 / a**3+ cosmo.Omega0_k / a**2 + cosmo.Omega0_lambda) ** -.5 * 1/a**3 *cosmo.H0/cosmo.C
+        return dict(_chi = res*_z, _Om0=res*_z)
     
-    def jvp(node, chi_, z, cosmo, z_chi_int):
+    def jvp(node, chi_, Om0_,Om0, z, cosmo, z_chi_int):
+        a = 1/z -1
         res = cosmo.efunc(z)*cosmo.H0/cosmo.C
-        return dict(z_ = res*chi_)
-    
+        res_o = (Om0 / a**3+ cosmo.Omega0_k / a**2 + cosmo.Omega0_lambda) ** -.5 * 1/a**3
+        j = res*chi_ + res_o*Om0_
+        j = np.nan_to_num(j, 0)
+        return dict(z_ = j)
 
 def get_PGD_params(B,res,n_steps,pgd_dir):
     """
@@ -339,7 +336,6 @@ class WLSimulation(FastPMSimulation):
         # 2D mesh area in rad^2 per pixel
         self.A       = self.mappm.BoxSize.prod()/self.mappm.Nmesh.prod()
         # redshift independent prefactor from Poisson equation
-        self.factor  = 3./2.*self.cosmo.Omega0_m*(self.cosmo.H0/self.cosmo.C)**2
       
     @autooperator('x->xy, d')
     def rotate(self, x, M, boxshift):
@@ -355,14 +351,14 @@ class WLSimulation(FastPMSimulation):
         xy = linalg.take(y, (0, 1), axis=1)
         return dict(xy=xy, d=d)
     
-    @autooperator('d->w')
-    def wlen(self, d, ds):
+    @autooperator('d, Om0->w')
+    def wlen(self, d, Om0, ds):
         """
         returns the correctly weighted lensing efficiency kernel
         d:   particle distance (assuming parllel projection)
         ds:  source redshift
         """
-        z          = z_chi(d,self.cosmo,self.z_chi_int)
+        z          = z_chi(d,Om0, self.cosmo,self.z_chi_int)
         columndens = self.nbar*self.A*linalg.pow(d,2) #particles/Volume*angular pixel area* distance^2 -> 1/L units
         w          = (ds-d)*d/ds*(1.+z)/columndens #distance
         return w
@@ -407,19 +403,18 @@ class WLSimulation(FastPMSimulation):
         f2 = finite_operator(Om0, lambda Om0, a=stages[0], support=self.support, FactoryCache=FactoryCache:
                                fastpm.firststep_f2(Om0, a, support, FactoryCache), epsilon=1e-6, mode='central')
         dx1, dx2 = fastpm.lpt(rhok, q, self.pm)
-        dx1 = dx1 * broadcast_to( D1, stdlib.eval(dx1, lambda dx1: dx1.shape))
-        dx2 = dx2 * broadcast_to( D2, stdlib.eval(dx1, lambda dx1: dx1.shape))
+        dx1 = dx1 *broadcast_to( D1, self.q.shape)
+        dx2 = dx2 *broadcast_to( D2, self.q.shape)
 
-        p1 = dx1 * broadcast_to( stages[0] ** 2 * f1 * E, stdlib.eval(dx1, lambda dx1: dx1.shape))
-        p2 = dx2 * broadcast_to( stages[0] ** 2 * f2 * E, stdlib.eval(dx1, lambda dx1: dx1.shape))
+        p1 = dx1 * broadcast_to( stages[0] ** 2 * f1 * E, self.q.shape)
+        p2 = dx2 * broadcast_to( stages[0] ** 2 * f2 * E, self.q.shape)
 
         p = p1 + p2
         dx = dx1 + dx2
         return dict(p=p, dx=dx)
 
-    @autooperator('dx,Om0, p,dx_PGD->kmaps')
+    @autooperator('dx,Om0, p, dx_PGD->kmaps')
     def interp(self, dx,Om0, p, dx_PGD, ax, ap, ai, af, FactoryCache):
-
         di_value, df_value = self.cosmo.comoving_distance(1. / numpy.array([ai, af]) - 1.)
         di = chi_z(Om0, 1. /ai - 1., self.cosmo)
         df = chi_z(Om0, 1. /af - 1., self.cosmo)
@@ -438,25 +433,26 @@ class WLSimulation(FastPMSimulation):
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
                 z_approx = z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.z_chi_int,chi=d_approx)['z']
                 a_approx = 1. / (z_approx + 1.)
-
+                a_approx = np.broadcast_to(a_approx[:, np.newaxis], self.q.shape)
                 # move particles to a_approx, then add PGD correction
                 drift = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, a_approx=a_approx, ax=ax, ap=ap:
                                        fastpm.DriftFactor(Om0, support, FactoryCache, a_approx, ax, ap), epsilon=1e-2, mode='central')
-                drift = linalg.reshape(drift,(np.shape(self.q)[0], 1))
-                drift = broadcast_to(drift, np.shape(self.q))
-                dx1      = dx + p*drift+ dx_PGD
+                dx = dx + dx_PGD
+                dx1 = p*drift
+                dx1      = dx1 + dx
 
                 # rotate their positions
-                xy, d    = self.rotate((dx1 + self.q)%self.pm.BoxSize, M, boxshift)
-
+                xy, d    = self.rotate((dx1+self.q)%self.pm.BoxSize, M, boxshift)
+                factor  = 3./2.*Om0*(self.cosmo.H0/self.cosmo.C)**2
+                factor = broadcast_to(factor, stdlib.eval(d, lambda d:d.shape))
                 # projection
                 xy       = ((xy - self.pm.BoxSize[:2]* 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
                     
                 for ii, ds in enumerate(self.ds):
                     w        = self.wlen(d,ds)
                     mask     = stdlib.eval([d, di, df], lambda args, ds=ds, d_approx=d_approx : 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0] <=ds))
-                    kmap_    = self.makemap(xy, w*mask)*self.factor   
-                    kmaps[ii] = kmaps[ii]+kmap_ 
+                    kmap_    = self.makemap(xy, factor*w*mask)
+                    kmaps[ii] = kmaps[ii]+kmap_
 
 
         return kmaps
@@ -471,7 +467,6 @@ class WLSimulation(FastPMSimulation):
 
         zero_map = Literal(self.mappm.create('real',value=0.)) 
         kmaps = [zero_map for ii in range(len(self.ds))]
-
         for M in self.imgen.generate(di_value, df_value):
                 # if lower end of box further away than source -> do nothing
             if df_value>self.max_ds:
@@ -485,14 +480,16 @@ class WLSimulation(FastPMSimulation):
                 xy, d    = self.rotate((dx + self.q)%self.pm.BoxSize, M, boxshift)
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
             
+                factor  = 3./2.*Om0*(self.cosmo.H0/self.cosmo.C)**2
+                factor  = broadcast_to(factor, stdlib.eval(d, lambda d:d.shape))
                 xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
 
                 for ii, ds in enumerate(self.ds):
                     if self.params['logging']: 
                         self.logger.info('projection, %d'%jj)
-                    w        = self.wlen(d,ds)
+                    w        = self.wlen(d,Om0,ds)*factor
                     mask     = stdlib.eval([d, di, df], lambda args, ds=ds, d_approx=d_approx : 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0] <=ds))
-                    kmap_    = self.makemap(xy, w*mask)*self.factor   
+                    kmap_    = self.makemap(xy,w*mask)
                     kmaps[ii] = kmaps[ii]+kmap_ 
 
         return kmaps
@@ -535,7 +532,7 @@ class WLSimulation(FastPMSimulation):
             # kick
             kick = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
                                    fastpm.KickFactor(Om0, support, FactoryCache, ai, ai, ac), epsilon=1e-9, mode='central')
-            kick = broadcast_to(kick * 1.5 * Om0,stdlib.eval(f, lambda f: f.shape))
+            kick = broadcast_to(kick * 1.5 * Om0, self.q.shape)
             dp = f *kick
             p  = p + dp
 
@@ -557,7 +554,6 @@ class WLSimulation(FastPMSimulation):
 
             for ii in range(len(self.ds)):
                 kmaps[ii] = kmaps[ii]+kmaps_[ii]
-
             # drift
             drift = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
                                    fastpm.DriftFactor(Om0, support, FactoryCache, ac, ac, af), epsilon=1e-9, mode='central')
@@ -571,7 +567,7 @@ class WLSimulation(FastPMSimulation):
             # kick
             kick = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
                                    fastpm.KickFactor(Om0, support, FactoryCache, ac, af, af), epsilon=1e-9, mode='central')
-            kick = broadcast_to(kick * 1.5 * Om0,stdlib.eval(f, lambda f: f.shape))
+            kick = broadcast_to(kick * 1.5 * Om0, self.q.shape)
             dp = f * kick
             p  = p + dp
         
@@ -584,7 +580,7 @@ class WLSimulation(FastPMSimulation):
         rhok = fastpm.r2c(rho)
 
         # Calculate EH power for initial modes
-        norm = finite_operator(Om0, lambda Om0, R=8, tf='EH': normalize(R, Om0, tf), epsilon=1e-6, mode='central')
+        norm = finite_operator(Om0, lambda Om0, R=8, tf='EH': normalize(R, Om0, tf), epsilon=1e-12, mode='central')
         norm = (sigma8/norm)**2
         norm = broadcast_to(norm, self.k_s.shape)
         transfer =  get_Pk_EH(Om0, cosmo=self.cosmo, z=0, k=self.k_s)**.5*norm**.5/self.pm.BoxSize.prod()**.5
@@ -612,14 +608,14 @@ class WLSimulation(FastPMSimulation):
             ac = (ai * af) ** 0.5
             # kick (update momentum)
             kick = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
-                                   fastpm.KickFactor(Om0, support, FactoryCache, ai, ai, ac), epsilon=1e-6, mode='central')
+                                   fastpm.KickFactor(Om0, support, FactoryCache, ai, ai, ac), epsilon=1e-12, mode='central')
             kick = broadcast_to(kick * 1.5 * Om0,stdlib.eval(f, lambda f: f.shape))
             dp = f * kick
             p  = p + dp
 
             # drift (update positions)
             drift = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
-                                   fastpm.DriftFactor(Om0, support, FactoryCache, ai, ac, af), epsilon=1e-6, mode='central')
+                                   fastpm.DriftFactor(Om0, support, FactoryCache, ai, ac, af), epsilon=1e-12, mode='central')
             drift = broadcast_to(drift, stdlib.eval(p, lambda p: p.shape))
             ddx = p * drift
             dx  = dx + ddx
@@ -653,7 +649,7 @@ class WLSimulation(FastPMSimulation):
 
             # kick (update momentum)
             kick = finite_operator(Om0, lambda Om0, support=self.support, FactoryCache=FactoryCache, ai=ai, af=af, ac=ac:
-                                   fastpm.KickFactor(Om0, support, FactoryCache, ac, af, af), epsilon=1e-6, mode='central')
+                                   fastpm.KickFactor(Om0, support, FactoryCache, ac, af, af), epsilon=1e-12, mode='central')
             kick = broadcast_to(kick * 1.5 * Om0,stdlib.eval(f, lambda f: f.shape))
             dp = f * kick
             p  = p + dp
@@ -730,11 +726,12 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
         kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m, sigma8=cosmo.sigma8),return_tape=True)
         if params['vjp']:
             vjp         = tape.get_vjp()
-            kmap_vjp    = vjp.compute(init=dict(_kmaps=kmaps), vout=['_rho', '_Om0', '_sigma8' ])
+            kmap_vjp    = vjp.compute(init=dict(_kmaps=np.ones(np.shape(kmaps[0]))), vout=['_rho', '_Om0', '_sigma8' ])
         if params['jvp']:
             jvp      = tape.get_jvp()
             kmap_jvp = jvp.compute(init=dict(rho_=v, Om0_=np.array([1]), sigma8_=np.array([0.0])), vout=['kmaps_'])
     if params['forward']:
         kmaps       = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_m, sigma8=cosmo.sigma8))
-
+    import pdb
+    pdb.set_trace()
     return kmaps, kmap_vjp, kmap_jvp, pm
