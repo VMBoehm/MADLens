@@ -19,91 +19,6 @@ import resource
 import logging
 import sys
 
-def BinarySearch_Left(mylist, items):
-    print(mylist, items)
-    "finds where to insert elements into a sorted array, this is the equivalent of numpy.searchsorted"
-    results =[]
-    for item in items:
-        if item>=max(mylist):
-            results.append(len(mylist))
-        elif item<=min(mylist):
-            results.append(0)
-        else:
-            results.append(binarysearch_left(mylist,item, low=0, high=len(mylist)-1))
-    return np.asarray(results, dtype=int)
-
-def binarysearch_left(A, value, low, high):
-    "left binary search"
-    if (high < low):
-        return low
-    mid = (low + high) //2
-    if (A[mid] >= value):
-        return binarysearch_left(A, value, low, mid-1)
-    else:
-        return binarysearch_left(A, value, mid+1, high)
-
-
-class mod_list(list):
-    def __add__(self,other):
-        assert(len(other)==len(self))
-        return [self[ii]+other[ii] for ii in range(len(self))]
-
-
-@operator
-class list_elem:
-    """
-    take an item from a list
-    """
-    ain = {'x' : '*',}
-    aout = {'elem' : '*'}
-
-    def apl(node, x, i):
-        elem = x[i]
-        return dict(elem=elem, x_shape=[numpy.shape(xx) for xx in x])
-
-    def vjp(node, _elem, x_shape, i):
-        _x       = []
-        for ii in range(len(x_shape)):
-            _x.append(numpy.zeros(x_shape[ii],dtype='f8'))
-        _x[i][:] = _elem
-
-        return dict(_x=_x)
-        
-    def jvp(node,x_, x, i):
-        elem_ = x_[i]
-        return dict(elem_=elem_)
-
-
-
-@operator
-class list_put:
-    """ 
-    put an item into a list
-    """
-    ain = {'x': 'ndarray', 'elem': 'ndarray'}
-    aout = {'y': 'ndarray'}
-
-    def apl(node, x, elem, i):
-        y    = x
-        y[i] = elem
-        return dict(y=y, len_x = len(x))
-
-    def vjp(node, _y, len_x, i):
-        _elem    = _y[i]
-        _x       = mod_list([_y[ii] for ii in range(len_x)])
-        _x[i]    = np.zeros_like(_elem)
-        return dict(_x=_x, _elem=_elem)
-
-    def jvp(node, x_, elem_, len_x, i):
-        deriv    = numpy.ones(len_x)
-        deriv[i] = 0
-        deriv_   = np.zeros(len_x)
-        deriv_[i]= 1
-        elem_    = np.asarray(elem_)
-        e        = np.asarray([elem_ for ii in range(len_x)])
-        y_       = numpy.einsum('i,i...->i...',deriv,x_)+numpy.einsum('i,i...->i...',deriv_,e)
-        y_       = mod_list(y_)
-        return dict(y_=y_)
 
 @operator
 class chi_z:
@@ -457,7 +372,7 @@ class WLSimulation(FastPMSimulation):
                 dx_PGD = 0.
 
             #if interpolation is on, only take 'half' and then evolve according to their position
-            kmaps = self.interp(dx, p , dx_PGD, ac, ac, ai, af,kmaps=ListPlaceholder(len(self.ds)))
+            kmaps_ = self.interp(dx, p , dx_PGD, ac, ac, ai, af,kmaps=ListPlaceholder(len(self.ds)))
 
             for ii in range(len(self.ds)):
                 kmaps[ii] = kmaps[ii]+kmaps_[ii]
@@ -601,10 +516,10 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
-    v = pm.create(type='real',value=0.)
+#    v = pm.create(type='real',value=0.)
 
-    if rank==0:
-        v[0,0,0]=1.
+#    if rank==0:
+#        v[0,0,0]=1.
 
     # results
     kmap_vjp,kmap_jvp = [None, None]
@@ -618,6 +533,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
             jvp      = tape.get_jvp()
             kmap_jvp = jvp.compute(init=dict(rho_=v), vout='kmaps_')
     if params['forward']:
-        kmaps       = model.compute(vout='kmaps', init=dict(rho=rho))
+        kmaps       = model.compute(vout='kmaps', init=dict(rho=rho), return_tape=False)
 
     return kmaps, kmap_vjp, kmap_jvp, pm
