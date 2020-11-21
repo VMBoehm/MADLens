@@ -54,12 +54,13 @@ def main(argv):
     params['zs_source'] = [float(zs) for zs in FLAGS.zs_source]
 
     if params['custom_cosmo']:
-        cosmo = Planck15.match(Omega0_m=FLAGS.Omega_m)
+        cosmo = Planck15.clone(P_k_max=30)
+        cosmo = cosmo.match(Omega0_m=FLAGS.Omega_m)
         cosmo = cosmo.match(sigma8=FLAGS.sigma_8)
     else:
         if rank==0:
             print('custom_cosmo is set to False. Using default cosmology.')
-        cosmo = Planck15
+        cosmo = Planck15.clone(P_k_max=30)
 
     if params['save3D'] or params['save3Dpower']:
         try:
