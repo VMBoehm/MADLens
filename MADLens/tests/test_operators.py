@@ -70,15 +70,6 @@ class Test_list_put_2d(BaseVectorTest):
         return res
 
 
-class Test_chi_z(BaseVectorTest):
-
-    x = np.array([0.5,1.0,1.5,2.])
-    cosmo = Planck15
-    y = cosmo.comoving_distance(x)
-
-    def model(self, x):
-        res = lightcone.chi_z(x,self.cosmo)
-        return res
 
 
 def get_params():
@@ -154,11 +145,11 @@ class Test_wlen(BaseVectorTest):
     columndens      = sim.nbar*sim.A*x**2 #particles/Volume*angular pixel area* distance^2 -> 1/L units
     y               = (ds-x)*x/ds*(1.+z)/columndens #distance
     def model(self,x):
-        res = self.sim.wlen(x,self.ds)
+        res = self.sim.wlen(x,Planck15.Omega0_m, self.ds)
         return res
 
 
-class Test_z_chi(BaseVectorTest):
+class Test_z_chi1(BaseVectorTest):
 
     x              = np.linspace(100,1000)
     z_int          = np.logspace(-8,np.log10(1500),10000)
@@ -167,9 +158,21 @@ class Test_z_chi(BaseVectorTest):
     y              = z_chi_int(x)
 
     def model(self,x):
-        y = lightcone.z_chi(x,Planck15,self.z_chi_int)
+        y = lightcone.z_chi(x,Planck15.Omega0_m, Planck15,self.z_chi_int)
         return y
  
+class Test_z_chi2(BaseVectorTest):
+
+    x              = np.array([Planck15.Omega0_m])
+    z_int          = np.logspace(-8,np.log10(1500),10000)
+    chis           = Planck15.comoving_distance(z_int) #Mpc/h
+    z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind=3,bounds_error=False, fill_value='extrapolate')
+    y              = z_chi_int(np.array([1000]))
+
+    def model(self,x):
+        x = linalg.take(x=x, axis=0, i=0)
+        y = lightcone.z_chi(np.array([1]),x, Planck15,self.z_chi_int)
+        return y
 
 class Test_makemap1(BaseScalarTest):
     
@@ -256,7 +259,7 @@ class Test_interp(BaseScalarTest):
 
                 #positions of unevolved particles after rotation
                 d_approx = self.sim.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
-                z_approx = lightcone.z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.sim.z_chi_int,chi=d_approx)['z']
+                z_approx = lightcone.z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.sim.z_chi_int,chi=d_approx, Om0=Planck15.Omega0_m)['z']
                 a_approx = 1. / (z_approx + 1.)
                 
                 #move particles to a_approx, then add PGD correction
@@ -290,7 +293,7 @@ class Test_reshape(BaseVectorTest):
         return result
 
 class Test_chi_z(BaseVectorTest):
-    redshift = .1
+    redshift =.1 
     x = numpy.array([Planck15.Omega0_m])
     y = Planck15.comoving_distance(redshift)
     def model(self, x):
