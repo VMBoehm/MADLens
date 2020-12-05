@@ -19,10 +19,10 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('output_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',2,'number of maps to produce at each source redshift')
-flags.DEFINE_float('boxsize',256.,'size of the simulation box in Mpc/h')
-flags.DEFINE_integer('Nmesh',256,'resolution of fastPM mesh')
+flags.DEFINE_float('boxsize',128.,'size of the simulation box in Mpc/h')
+flags.DEFINE_integer('Nmesh',128,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
-flags.DEFINE_float('boxsize2D',10.9,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
+flags.DEFINE_float('boxsize2D',2.,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 # 10.9, 6.2, 4.7, 4. 
 flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
@@ -31,7 +31,7 @@ flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upp
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
-flags.DEFINE_spaceseplist('zs_source',['0.5'],'source redshifts')
+flags.DEFINE_spaceseplist('zs_source',['2.0'],'source redshifts')
 flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
