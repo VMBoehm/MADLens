@@ -26,6 +26,7 @@ flags.DEFINE_float('boxsize2D',6.2,'field of view in degrees (default is optimal
 flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
 #bounds from KIDS contours, default values from Planck2015
 flags.DEFINE_bool('custom_cosmo', False, 'custom cosmology? If true, read in values for sigma8 and Omega_m, otherwise use Plmack15 as default') 
+flags.DEFINE_bool('param_derivs', False, 'if you wish to take a derivative with respect to cosmological parameters.') 
 flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
@@ -55,7 +56,8 @@ def main(argv):
 
     if params['custom_cosmo']:
         cosmo = Planck15.clone(P_k_max=30)
-        cosmo = cosmo.match(Omega0_m=FLAGS.Omega_m)
+        cosmo = cosmo.clone(Omega_ncdm=0)
+        cosmo = cosmo.clone(Omega0_cdm=FLAGS.Omega_m)
         cosmo = cosmo.match(sigma8=FLAGS.sigma_8)
     else:
         if rank==0:
@@ -128,7 +130,10 @@ def main(argv):
             mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
             if jvp:
                 jvp_mapfile = os.path.join(dirs['derivs'],'JVP_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
-                np.save(jvp_mapfile, jvp[0][0])
+                np.save(jvp_mapfile, jvp[jj][0])
+            if vjp:
+                vjp_mapfile = os.path.join(dirs['derivs'],'VJP_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npz')
+                np.savez(vjp_mapfile, rho_=vjp[0], Om0_=np.array(vjp[1]), sigma8_=np.array(vjp[2]))
             save_2Dmap(kmap,mapfile)
             if rank==0:
                 print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))
