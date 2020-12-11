@@ -495,11 +495,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     rhok      = pm.generate_whitenoise(seed=randseeds[num], unitary=False, type='complex')
     rhok      = rhok.apply(lambda k, v:(cosmo.get_pklin(k.normp(2) ** 0.5, 0) / pm.BoxSize.prod()) ** 0.5 * v)
 
-    #rho       = rhok.c2r()
-    #if rank == 0:
-    #    rho.value[0,0,0]=rho.value[0,0,0]-1e-5
-    #rho       = rho.r2c()
-
     #set zero mode to zero
     rhok.csetitem([0, 0, 0], 0)
 
@@ -516,10 +511,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
-#    v = pm.create(type='real',value=0.)
-
-#    if rank==0:
-#        v[0,0,0]=1.
 
     # results
     kmap_vjp,kmap_jvp = [None, None]
