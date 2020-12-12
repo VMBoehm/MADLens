@@ -758,5 +758,4 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
             kmap_jvp = jvp.compute(init=dict(rho_=rho, Om0_=np.array([cosmo.Omega0_cdm]), sigma8_=np.array([cosmo.sigma8])), vout=['kmaps_'])
     else:
         kmaps    = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_cdm, sigma8=cosmo.sigma8))
-    print(kmap_vjp)
     return kmaps, kmap_vjp, kmap_jvp, pm
