@@ -5,8 +5,6 @@ from vmad.core.symbol import Literal, ListPlaceholder
 from vmad.lib import fastpm
 from vmad.lib import linalg
 from vmad.lib.fastpm import FastPMSimulation, ParticleMesh
-from MADLens.fastpm_Om0 import FastPMSimulation_Om0
-from MADLens import fastpm_Om0
 import numpy
 from vmad.lib.linalg import sum, mul, broadcast_to
 import scipy 
@@ -25,6 +23,9 @@ import logging
 import sys
 
 def get_kedges(x1):
+    """
+    Compute the k-modes for a given complex pm-object
+    """
     dk = 2*np.pi/min(x1.BoxSize)**2
     kmin= dk
     kedges = np.arange(kmin, np.pi*min(x1.Nmesh)/max(x1.BoxSize) + dk/2, dk)
