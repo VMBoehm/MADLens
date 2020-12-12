@@ -460,7 +460,8 @@ class WLSimulation(FastPMSimulation):
 
                 # positions of unevolved particles after rotation
                 d_approx = self.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
-                z_approx = z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.z_chi_int,chi=d_approx, Om0=Om0)['z']
+                z_approx = z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.z_chi_int,chi=d_approx, Om0=Om0,
+                                          z_chi_int_upper=self.z_chi_int_upper, z_chi_int_lower=self.z_chi_int_lower)['z']
                 a_approx = 1. / (z_approx + 1.)
 
                 # move particles to a_approx, then add PGD correction
@@ -480,12 +481,13 @@ class WLSimulation(FastPMSimulation):
                     #Get the right shapes for backprop
                     dsi = ds[ii]
                     dsi = broadcast_to(dsi, stdlib.eval(d, lambda d:d.shape))
+                    Om0 = broadcast_to(Om0, stdlib.eval(d, lambda d:d.shape))
                     factor  = 3./2.*Om0*(self.cosmo.H0/self.cosmo.C)**2
-                    #Compute lensing efficiency and project to make map
-                    mask     = stdlib.eval([d, di, df, dsi], lambda args, d_approx=d_approx : 1.0 * (d_approx < args[1]) * (d_approx >= args[2]) * (args[0] <=args[3]))
-                    w        = self.wlen(d,Om0,dsi)
-                    kmap_    = self.makemap(xy,w*mask*factor)
 
+                    #Compute lensing efficiency and mask, then project to make map
+                    w        = self.wlen(d,Om0,dsi)
+                    mask     = stdlib.eval([d, di, df, dsi], lambda args, d_approx=d_approx: 1.0 * (d_approx< args[1]) * (d_approx >= args[2]) * (args[0] <=args[3]))
+                    kmap_    = self.makemap(xy,w*mask*factor)
                     kmaps[ii] = kmaps[ii]+kmap_
         return kmaps
 
@@ -519,7 +521,7 @@ class WLSimulation(FastPMSimulation):
                 #Find/apply rotations and shifts
                 M, boxshift = M
                 xy, d    = self.rotate((dx + self.q)%self.pm.BoxSize, M, boxshift)
-                _, d_approx = self.rotate(M=M, boxshift=boxshift, x=self.q)#.compute('d', init=dict(x=self.q))
+                _, d_approx = self.rotate(M=M, boxshift=boxshift, x=self.q)
                 xy       = ((xy - self.pm.BoxSize[:2] * 0.5)/linalg.broadcast_to(linalg.reshape(d, (len(self.q),1)), (len(self.q), 2))+self.mappm.BoxSize * 0.5 )
 
                 for ii, zs in enumerate(self.zs):
@@ -529,15 +531,12 @@ class WLSimulation(FastPMSimulation):
                     #Get the right shapes for backprop
                     dsi = ds[ii]
                     dsi = broadcast_to(dsi, stdlib.eval(d, lambda d:d.shape))
-                    #di = broadcast_to(di, stdlib.eval(d, lambda d:d.shape))
-                    #df = broadcast_to(df, stdlib.eval(d, lambda d:d.shape))
                     Om0 = broadcast_to(Om0, stdlib.eval(d, lambda d:d.shape))
                     factor  = 3./2.*Om0*(self.cosmo.H0/self.cosmo.C)**2
 
                     #Compute lensing efficiency and project to make map
                     w        = self.wlen(d,Om0,dsi)
                     mask     = stdlib.eval([d, di, df, dsi, d_approx], lambda args: 1.0 * (args[4]< args[1]) * (args[4] >= args[2]) * (args[0] <=args[3]))
-                    #mask = make_mask(d, di, df, dsi, d_approx)
                     kmap_    = self.makemap(xy,w*mask*factor)
                     kmaps[ii] = kmaps[ii]+kmap_
 
@@ -559,19 +558,16 @@ class WLSimulation(FastPMSimulation):
         digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.k_s)
         rhok= fastpm.apply_digitized(x=rhok, tf=transfer, digitizer=digitizer, kind='wavenumber', mode='amplitude')
 
-
-        #First step work around
-        pt     = self.pt
+        #pt     = self.pt
         stages = self.stages
         q      = self.q
-        p, dx = self.first_step_workaround(rhok, Om0, pt, q)
-
-        powers = []
+        FactoryCache = fastpm.CosmologyFactory()
+        #First step work around
+        p, dx = self.first_step_workaround(rhok, Om0, stages, q, FactoryCache)
 
         zero_map = Literal(self.mappm.create('real', value=0.))
         kmaps  = [zero_map for zs in self.zs]
-
-        f, potk= self.gravity(dx)
+        f, potk= fastpm.gravity(dx, self.q, self.fpm)
 
         for ai, af in zip(stages[:-1], stages[1:]):
             # central scale factor
