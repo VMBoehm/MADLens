@@ -749,11 +749,6 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
     else:
         model     = wlsim.run.build()
 
-    v = pm.create(type='real',value=0.)
-
-    #if rank==0:
-    #    v[0,0,0]=0
-
     # results
     kmap_vjp,kmap_jvp = [None, None]
     # compute
@@ -763,8 +758,10 @@ def run_wl_sim(params, num, cosmo, randseed = 187):
             vjp         = tape.get_vjp()
             kmap_vjp    = vjp.compute(init=dict(_kmaps=np.ones_like(kmaps[0].value)), vout=['_rho', '_Om0', '_sigma8' ])
         if params['jvp']:
+            
             jvp      = tape.get_jvp()
-            kmap_jvp = jvp.compute(init=dict(rho_=v, Om0_=np.array([1]), sigma8_=np.array([0.0])), vout=['kmaps_'])
-    if params['forward']:
-            kmaps = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_cdm, sigma8=cosmo.sigma8))
+            kmap_jvp = jvp.compute(init=dict(rho_=rho, Om0_=np.array([cosmo.Omega0_cdm]), sigma8_=np.array([cosmo.sigma8])), vout=['kmaps_'])
+    else:
+        kmaps    = model.compute(vout='kmaps', init=dict(rho=rho, Om0=cosmo.Omega0_cdm, sigma8=cosmo.sigma8))
+
     return kmaps, kmap_vjp, kmap_jvp, pm
