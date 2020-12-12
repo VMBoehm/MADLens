@@ -2,6 +2,8 @@ import numpy as np
 from MADLens.testing import BaseVectorTest, BaseScalarTest
 from nbodykit.cosmology import Planck15
 from MADLens import lightcone
+from MADLens.finite_operator import finite_operator
+from MADLens.fastpm_Om0 import CosmologyFactory
 from vmad.lib.fastpm import FastPMSimulation as vmadPMSimulation
 from vmad.lib.fastpm import ParticleMesh as vmadParticleMesh
 import vmad.lib.fastpm as vmadfastpm
@@ -155,24 +157,25 @@ class Test_z_chi1(BaseVectorTest):
     z_int          = np.logspace(-8,np.log10(1500),10000)
     chis           = Planck15.comoving_distance(z_int) #Mpc/h
     z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind=3,bounds_error=False, fill_value=0.)
+
+    #For z_chi fd
+    cosmo = Planck15
+    cosmo_upper = cosmo.clone(Omega0_cdm=Planck15.Omega0_m+1e-3)
+    z_int          = np.logspace(-8,np.log10(1500),10000)
+    chis           = cosmo_upper.comoving_distance(z_int) #Mpc/h
+    z_chi_int_upper = scipy.interpolate.interp1d(chis,z_int, kind='linear',bounds_error=False, fill_value='extrapolate')
+
+    cosmo_lower = cosmo.clone(Omega0_cdm=Planck15.Omega0_m-1e-3)
+    z_int          = np.logspace(-8,np.log10(1500),10000)
+    chis           = cosmo_lower.comoving_distance(z_int) #Mpc/h
+    z_chi_int_lower = scipy.interpolate.interp1d(chis,z_int, kind='linear',bounds_error=False, fill_value='extrapolate')      
+
     y              = z_chi_int(x)
 
     def model(self,x):
-        y = lightcone.z_chi(x,Planck15.Omega0_m, Planck15,self.z_chi_int)
+        y = lightcone.z_chi(x,Planck15.Omega0_m, Planck15,self.z_chi_int, self.z_chi_int_upper, self.z_chi_int_lower)
         return y
  
-class Test_z_chi2(BaseVectorTest):
-
-    x              = np.array([Planck15.Omega0_m])
-    z_int          = np.logspace(-8,np.log10(1500),10000)
-    chis           = Planck15.comoving_distance(z_int) #Mpc/h
-    z_chi_int = scipy.interpolate.interp1d(chis,z_int, kind=3,bounds_error=False, fill_value='extrapolate')
-    y              = z_chi_int(np.array([1000]))
-
-    def model(self,x):
-        x = linalg.take(x=x, axis=0, i=0)
-        y = lightcone.z_chi(np.array([1]),x, Planck15,self.z_chi_int)
-        return y
 
 class Test_makemap1(BaseScalarTest):
     
@@ -236,6 +239,16 @@ class Test_interp(BaseScalarTest):
     to_scalar = staticmethod(vmadfastpm.to_scalar)
     
     pm, cosmo, q, kmaps, DriftFactor, mappm ,sim = set_up()
+    #For z_chi fd
+    cosmo_upper = cosmo.clone(Omega0_cdm=Planck15.Omega0_m+1e-3)
+    z_int          = np.logspace(-8,np.log10(1500),10000)
+    chis           = cosmo_upper.comoving_distance(z_int) #Mpc/h
+    z_chi_int_upper = scipy.interpolate.interp1d(chis,z_int, kind='linear',bounds_error=False, fill_value='extrapolate')
+
+    cosmo_lower = cosmo.clone(Omega0_cdm=Planck15.Omega0_m-1e-3)
+    z_int          = np.logspace(-8,np.log10(1500),10000)
+    chis           = cosmo_lower.comoving_distance(z_int) #Mpc/h
+    z_chi_int_lower = scipy.interpolate.interp1d(chis,z_int, kind='linear',bounds_error=False, fill_value='extrapolate')      
     y  = NotImplemented
     ai = np.asarray([0.5])
     af = np.asarray([1.0])
@@ -259,7 +272,8 @@ class Test_interp(BaseScalarTest):
 
                 #positions of unevolved particles after rotation
                 d_approx = self.sim.rotate.build(M=M, boxshift=boxshift).compute('d', init=dict(x=self.q))
-                z_approx = lightcone.z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.sim.z_chi_int,chi=d_approx, Om0=Planck15.Omega0_m)['z']
+                z_approx = lightcone.z_chi.apl.impl(node=None,cosmo=self.cosmo,z_chi_int=self.sim.z_chi_int,chi=d_approx, Om0=Planck15.Omega0_m, z_chi_int_upper=self.z_chi_int_upper,
+                                                    z_chi_int_lower=self.z_chi_int_lower)['z']
                 a_approx = 1. / (z_approx + 1.)
                 
                 #move particles to a_approx, then add PGD correction
@@ -272,7 +286,7 @@ class Test_interp(BaseScalarTest):
                 xy       = (xy - self.pm.BoxSize[:2]* 0.5)/linalg.broadcast_to(linalg.reshape(d, (np.prod(self.pm.Nmesh),1)), (np.prod(self.pm.Nmesh), 2))+ self.sim.mappm.BoxSize * 0.5 
 
                 for ii, ds in enumerate(self.sim.ds):
-                    w        = self.sim.wlen(d,ds)
+                    w        = self.sim.wlen(d,self.cosmo.Omega0_m, ds)
                     mask     = stdlib.eval(d, lambda d, di=di, df=df, ds=ds, d_approx=d_approx: 1.0 * (d_approx < di) * (d_approx >= df) * (d <=ds))
                     #kmap     = lightcone.list_elem(self.kmaps,ii)
                     kmap_    = self.sim.makemap(xy, w*mask)
@@ -300,3 +314,38 @@ class Test_chi_z(BaseVectorTest):
         x = linalg.take(x=x, axis=0, i=0)
         chi = lightcone.chi_z(Omega0_m=x, z=self.redshift, cosmo=Planck15)
         return chi
+
+    
+class Test_finite_vector(BaseVectorTest):
+    x = numpy.arange(10)
+    y = numpy.sum(x ** 2)
+
+    @staticmethod
+    def func(param):
+        return numpy.einsum("k,k->", numpy.ones(len(param)), param ** 2)
+
+    def model(self, x):
+        from vmad.core.stdlib import finite_operator
+        c = finite_operator(x, lambda param: self.func(param), epsilon=1e-6)
+        return c
+
+class Test_finite_vector2(BaseVectorTest):
+    x = numpy.array(5)
+    y = x**2
+
+    @staticmethod
+    def func(param):
+        return param**2 
+
+    def model(self, x):
+        from vmad.core.stdlib import finite_operator
+        c = finite_operator(x, lambda param: self.func(param), epsilon=1e-6)
+        return c
+
+def test_cosmofactory():
+    from vmad.lib.fastpm import CosmologyFactory
+
+    cosmo = CosmologyFactory()
+
+    assert cosmo.get_cosmology(.3, a=1) is not cosmo.get_cosmology(.4, a=1)
+    assert cosmo.get_cosmology(.3, a=1) is cosmo.get_cosmology(.3, a=1)
