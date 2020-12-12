@@ -2,7 +2,7 @@
 a differentiable lensing simulator
 
 ## Description
-MADLens is a python package for producing non-Gaussian cosmic shear maps at arbitrary source redshifts. MADLens is designed to achieve high accuracy while keeping computational costs as low as possible. A MADLens simulation with only $256^3$ particles produces convergence maps whose power agree with theoretical lensing power spectra up to scales of L=10000.
+MADLens is a python package for producing non-Gaussian cosmic shear maps at arbitrary source redshifts. MADLens is designed to achieve high accuracy while keeping computational costs as low as possible. A MADLens simulation with only 256^3 particles produces convergence maps whose power agree with theoretical lensing power spectra up to scales of L=10000.
 MADlens is based on a highly parallelizable particle-mesh algorithm and employs a sub-evolution scheme in the lensing projection and a machine-learning inspired sharpening step to achieve these high accuracies.
 <p float="left">
 <img src="/figures/redshift_comp.png" width="400"/> 
@@ -32,7 +32,7 @@ Run the code with
 python run_lightcone.py
 ```
 
-### on a cluster (NERSC)
+### On a cluster (NERSC)
 
 Download the code.
 
@@ -69,6 +69,7 @@ BoxSize | side length of the simulation box | 128-1024 Mpc/h |
 Nmesh | resolution of the particle-mesh simulation | 64^3-512^3 |
 B | force resolution factor | 2 |
 Nsteps | number of steps in the FastPM simulation | 11-40 |
+N_maps | number of output maps | >1 |
 Nmesh2D | resolution of the convergence map | 256^2-2048^2 |
 BoxSize2D | size of the convergence map in degrees | 2.5-22 degrees |
 zs\_source | list of source redshifts | 0.3-2.0 |
