@@ -1,6 +1,6 @@
 from vmad import autooperator, operator
 from vmad.core import stdlib
-from vmad.core.stdlib.finite_operator import finite_operator
+from MADLens.finite_operator import finite_operator
 from vmad.core.symbol import Literal, ListPlaceholder
 from vmad.lib import fastpm
 from vmad.lib import linalg
