@@ -9,7 +9,7 @@ MADlens is based on a highly parallelizable particle-mesh algorithm and employs 
 
 MADLens is fully differentiable with respect to the initial conditions of the underlying particle-mesh simulations and a number of cosmological parameters. These properties allow MADLens to be used as a forward model in Bayesian inference algorithms that require optimization or derivative-aided sampling. Another use case for MADLens is the production of large, high resolution simulation sets as they are required for training novel deep-learning-based lensing analysis tools.
 
-## Installation
+## Installation and running the code
 
 ### On your personal computer
 
@@ -22,6 +22,11 @@ which installs MADLens together with all its dependencies.
 Alternatively, to create a conda environment with the required dependencies, run 
 ```
 conda env create -f MADLens.yml
+```
+Run the code with
+
+```
+python run_lightcone.py
 ```
 
 ### on a cluster (NERSC)
@@ -48,7 +53,7 @@ To display all parameters run
 python run_lightcone.py --helpfull
 ```
 
-to set a parameter, either change its default in run_lightcone.py or pass them as
+to set a parameter, either change its default in [run_lightcone.py](https://github.com/VMBoehm/MADLens/blob/master/run_lightcone.py) or pass them as
 
 ```
 python run_lightcone.py --parameter_name parameter_value
@@ -60,7 +65,7 @@ Parameter |  Description | Typical Value(s) |
 BoxSize | side length of the simulation box | 128-1024 Mpc/h |
 Nmesh | resolution of the particle-mesh simulation | 64^3-512^3 |
 B | force resolution factor | 2 |
-Nsteps | number of steps in the FastPM simulation & 11-40 |
+Nsteps | number of steps in the FastPM simulation | 11-40 |
 Nmesh2D | resolution of the convergence map | 256^2-2048^2 |
 BoxSize2D | size of the convergence map in degrees | 2.5-22 degrees |
 zs\_source | list of source redshifts | 0.3-2.0 |
@@ -83,4 +88,14 @@ To use the MADLens version that support parameter derivatives, checkout the *par
 Vanessa Böhm, Yu Feng, Max Lee, Biwei Dai 
 
 ## Packages
+
+- Automatic Differentiation based on [VMAD](https://github.com/rainwoodman/vmad)
+- Particle Mesh Simulation based on [FastPM](https://github.com/rainwoodman/fastpm-python)
+
+other packages MADlens relies on:
+
+- [Nbodykit](https://nbodykit.readthedocs.io/en/latest/index.html)
+- [pmesh](https://github.com/rainwoodman/pmesh)
+
+
 
