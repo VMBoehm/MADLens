@@ -312,6 +312,12 @@ class WLSimulation(FastPMSimulation):
         self.ds      = np.asarray([cosmology.comoving_distance(zs) for zs in self.zs],dtype=float)
         # maximal distance at which particles need to be read out
         self.max_ds  = max(self.ds)
+
+        stages = numpy.array(stages)
+        mid = (stages[1:] * stages[:-1]) ** 0.5
+        support = numpy.concatenate([mid, stages])
+        support.sort()
+        self.support = support
         
         # redshift as a function of comsoving distance for underlying cosmology
         z_int          = np.logspace(-12,np.log10(1500),40000)
@@ -552,7 +558,6 @@ class WLSimulation(FastPMSimulation):
         digitizer = fastpm.apply_digitized.isotropic_wavenumber(self.k_s)
         rhok= fastpm.apply_digitized(x=rhok, tf=transfer, digitizer=digitizer, kind='wavenumber', mode='amplitude')
 
-        #pt     = self.pt
         stages = self.stages
         q      = self.q
         FactoryCache = fastpm_Om0.CosmologyFactory()
