@@ -19,19 +19,19 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('output_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
-flags.DEFINE_float('boxsize',64.,'size of the simulation box in Mpc/h')
-flags.DEFINE_integer('Nmesh',64,'resolution of fastPM mesh')
-flags.DEFINE_integer('Nmesh2D',64, 'resolution of lensing map')
-flags.DEFINE_float('boxsize2D',6.2,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
-flags.DEFINE_integer('N_steps',11,'number of fastPM steps')
-#bounds from KIDS contours, default values from Planck2015
+flags.DEFINE_float('boxsize', 512.,'size of the simulation box in Mpc/h')
+flags.DEFINE_integer('Nmesh', 1024,'resolution of fastPM mesh')
+flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
+flags.DEFINE_float('boxsize2D',12.5,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
+flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
 flags.DEFINE_bool('custom_cosmo', False, 'custom cosmology? If true, read in values for sigma8 and Omega_m, otherwise use Plmack15 as default') 
+flags.DEFINE_bool('param_derivs', False, 'if you wish to take a derivative with respect to cosmological parameters.') 
 flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
 flags.DEFINE_spaceseplist('zs_source',['1.0'],'source redshifts')
-flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
+flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
 flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
@@ -39,7 +39,7 @@ flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', False, 'whether to compute the jvp')
 flags.DEFINE_boolean('forward',True, 'whether to run forward model')
 flags.DEFINE_boolean('analyze',False, 'whether to print out resource usage')
-flags.DEFINE_string('label', 'cross_test', 'label of this run')
+flags.DEFINE_string('label', 'cross_test_noPGD', 'label of this run')
 flags.DEFINE_boolean('logging', 'False', 'whether to log run or not')
 
 def main(argv):
@@ -54,12 +54,14 @@ def main(argv):
     params['zs_source'] = [float(zs) for zs in FLAGS.zs_source]
 
     if params['custom_cosmo']:
-        cosmo = Planck15.match(Omega0_m=FLAGS.Omega_m)
+        cosmo = Planck15.clone(P_k_max=30)
+        cosmo = cosmo.clone(Omega_ncdm=0)
+        cosmo = cosmo.clone(Omega0_cdm=FLAGS.Omega_m)
         cosmo = cosmo.match(sigma8=FLAGS.sigma_8)
     else:
         if rank==0:
             print('custom_cosmo is set to False. Using default cosmology.')
-        cosmo = Planck15
+        cosmo = Planck15.clone(P_k_max=30)
 
     if params['save3D'] or params['save3Dpower']:
         try:
@@ -101,7 +103,7 @@ def main(argv):
                     else:
                         num_run+=1
 
-        for result in ['cls','maps','snapshots']:
+        for result in ['cls','maps','snapshots', 'derivs']:
             dirs[result] = os.path.join(path_name,result)
             if not os.path.isdir(dirs[result]):
                 os.makedirs(dirs[result])
@@ -125,6 +127,12 @@ def main(argv):
         for jj,z_source in enumerate(params['zs_source']):
             kmap    = kmaps[jj]
             mapfile = os.path.join(dirs['maps'],'map_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
+            if jvp:
+                jvp_mapfile = os.path.join(dirs['derivs'],'JVP_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npy')
+                np.save(jvp_mapfile, jvp[jj][0])
+            if vjp:
+                vjp_mapfile = os.path.join(dirs['derivs'],'VJP_decon_zsource%d_map%d_of%d'%(z_source*10,ii,params['N_maps'])+'.npz')
+                np.savez(vjp_mapfile, rho_=vjp[0], Om0_=np.array(vjp[1]), sigma8_=np.array(vjp[2]))
             save_2Dmap(kmap,mapfile)
             if rank==0:
                 print('2D map #%d at z_s=%.1f dumped to %s'%(ii,z_source,mapfile))
