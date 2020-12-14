@@ -85,7 +85,7 @@ We provide PGD parameters for a limited amount of configurations. Before using P
 
 ## Forward Model and Gradient Computation
 
-See [lightcone.py](https://github.com/VMBoehm/MADLens/blob/master/MADLens/lightcone.py) for examples of how to compute forward passes, vector-Jacobian and Jacobian-vector products.
+See [lightcone.py](https://github.com/VMBoehm/MADLens/blob/0a4d491a2c81f8a46eb350a23ab1456fe8654b86/MADLens/lightcone.py#L462) for examples of how to compute forward passes, vector-Jacobian and Jacobian-vector products.
 
 For example,
 ```
