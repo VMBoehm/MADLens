@@ -83,9 +83,26 @@ interpolation | whether to use the sub-evolution scheme | True/False |
 We provide PGD parameters for a limited amount of configurations. Before using PGD, you have to dump those parameters into parameter files by running the notebook
 [PGD_params.ipynb](https://github.com/VMBoehm/MADLens/blob/master/notebooks/PGD_params.ipynb)
 
+## Forward Model and Gradient Computation
+
+See [lightcone.py](https://github.com/VMBoehm/MADLens/blob/master/MADLens/lightcone.py) for examples of how to compute forward passes, vector-Jacobian and Jacobian-vector products.
+
+For example,
+```
+kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho),return_tape=True)
+```
+evolves initial conditions *rho* into lensing maps *kmaps* (runs the forward model), while saving operations to the tape.
+
+One the tape has been created,
+```
+vjp         = tape.get_vjp()
+kmap_vjp    = vjp.compute(init=dict(_kmaps=vector), vout='_rho')
+```
+computes the vector Jacobian product against a vector of the same shape as *kmaps*.
+
 ## Parameter Gradients
 
-To use the MADLens version that support parameter derivatives, checkout the *param_deriv* branch.
+To use the MADLens version that support parameter derivatives, checkout the *param_derivs* branch.
 
 ## Contributors
 
