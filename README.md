@@ -1,5 +1,5 @@
 # MADLens
-a differentiable lensing simulator
+a differentiable lensing simulator ([preprint](https://arxiv.org/abs/2012.07266))
 
 ## Description
 MADLens is a python package for producing non-Gaussian cosmic shear maps at arbitrary source redshifts. MADLens is designed to achieve high accuracy while keeping computational costs as low as possible. A MADLens simulation with only 256^3 particles produces convergence maps whose power agree with theoretical lensing power spectra up to scales of L=10000.
