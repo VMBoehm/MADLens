@@ -93,7 +93,7 @@ kmaps, tape = model.compute(vout='kmaps', init=dict(rho=rho),return_tape=True)
 ```
 evolves initial conditions *rho* into lensing maps *kmaps* (runs the forward model), while saving operations to the tape.
 
-One the tape has been created,
+Once the tape has been created,
 ```
 vjp         = tape.get_vjp()
 kmap_vjp    = vjp.compute(init=dict(_kmaps=vector), vout='_rho')
