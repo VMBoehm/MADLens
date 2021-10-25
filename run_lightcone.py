@@ -19,27 +19,28 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('output_path',os.path.join(os.getcwd(),'results/'), "path for storing results")
 flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to the PGD parameter files")
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
-flags.DEFINE_float('boxsize', 512.,'size of the simulation box in Mpc/h')
-flags.DEFINE_integer('Nmesh', 1024,'resolution of fastPM mesh')
-flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
-flags.DEFINE_float('boxsize2D',12.5,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
+flags.DEFINE_float('boxsize', 1024,'size of the simulation box in x-y direction in Mpc/h')
+flags.DEFINE_boolean('anisotropic_box',True,'whether to use anisotropic box. If True box extends up to maximum source redshift, if False box is cubic')
+flags.DEFINE_integer('Nmesh', 32,'resolution of fastPM mesh')
+flags.DEFINE_integer('Nmesh2D',64, 'resolution of lensing map')
+flags.DEFINE_float('boxsize2D',6.,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
 flags.DEFINE_bool('custom_cosmo', False, 'custom cosmology? If true, read in values for sigma8 and Omega_m, otherwise use Plmack15 as default') 
 flags.DEFINE_float('Omega_m',0.3089,'total matter density', lower_bound=0.1, upper_bound=0.5)
 flags.DEFINE_float('sigma_8',0.8158,'amplitude of matter fluctuations', lower_bound=0.4, upper_bound=1.3)
 flags.DEFINE_boolean('PGD',False,'whether to use PGD sharpening')
 flags.DEFINE_integer('B',2,'force resolution factor')
-flags.DEFINE_spaceseplist('zs_source',['1.0'],'source redshifts')
-flags.DEFINE_boolean('interpolate',True,'whether to interpolate between snapshots')
+flags.DEFINE_spaceseplist('zs_source',['1088.877'],'source redshifts')
+flags.DEFINE_boolean('interpolate',False,'whether to interpolate between snapshots')
 flags.DEFINE_boolean('debug',True,'debug mode allows to run repeatedly with the same settings')
 flags.DEFINE_boolean('save3D',False,'whether to dump the snapshots, requires interp to be set to False')
-flags.DEFINE_boolean('save3Dpower', False, 'whether to measure and save the power spectra of the snapshots')
+flags.DEFINE_boolean('save3Dpower', True, 'whether to measure and save the power spectra of the snapshots')
 flags.DEFINE_boolean('vjp', False,'whether to compute the vjp')
 flags.DEFINE_boolean('jvp', False, 'whether to compute the jvp')
 flags.DEFINE_boolean('forward',True, 'whether to run forward model')
-flags.DEFINE_boolean('analyze',False, 'whether to print out resource usage')
-flags.DEFINE_string('label', 'cross_test_noPGD', 'label of this run')
-flags.DEFINE_boolean('logging', 'False', 'whether to log run or not')
+flags.DEFINE_boolean('analyze',True, 'whether to print out resource usage')
+flags.DEFINE_string('label', 'CMB_test', 'label of this run')
+flags.DEFINE_boolean('logging', 'True', 'whether to log run or not')
 
 def main(argv):
     del argv
@@ -59,6 +60,10 @@ def main(argv):
         if rank==0:
             print('custom_cosmo is set to False. Using default cosmology.')
         cosmo = Planck15
+
+    if params['anisotropic_box']:
+        params['BoxSize'] = [params['BoxSize'][0], params['BoxSize'][1],cosmo.comoving_distance(max(params['zs_source'])+1e-3)]
+        print('using anisotropic box')
 
     if params['save3D'] or params['save3Dpower']:
         try:
