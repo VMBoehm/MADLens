@@ -21,7 +21,8 @@ flags.DEFINE_string('PGD_path',os.path.join(os.getcwd(),'pgd_params/'),"path to 
 flags.DEFINE_integer('N_maps',1,'number of maps to produce at each source redshift')
 flags.DEFINE_float('boxsize', 1024,'size of the simulation box in x-y direction in Mpc/h')
 flags.DEFINE_boolean('anisotropic_box',True,'whether to use anisotropic box. If True box extends up to maximum source redshift, if False box is cubic')
-flags.DEFINE_integer('Nmesh', 512,'resolution of fastPM mesh')
+flags.DEFINE_integer('resolution_ratio',4, 'ratio of resolution in x/y direction versus z-direcion')
+flags.DEFINE_integer('Nmesh', 1024,'resolution of fastPM mesh')
 flags.DEFINE_integer('Nmesh2D',2048, 'resolution of lensing map')
 flags.DEFINE_float('boxsize2D',6.,'field of view in degrees (default is optimal for default settings, use FindConfigs.ipynb notebook to find optimal fov for your setting.')
 flags.DEFINE_integer('N_steps',40,'number of fastPM steps')
@@ -62,8 +63,12 @@ def main(argv):
         cosmo = Planck15
 
     if params['anisotropic_box']:
-        params['BoxSize'] = [params['BoxSize'][0], params['BoxSize'][1],cosmo.comoving_distance(max(params['zs_source'])+1e-3)]
+        params['BoxSize'][-1] = np.ceil(cosmo.comoving_distance(max(params['zs_source'])+1e-3)/params['resolution_ratio'])*params['resolution_ratio']
         print('using anisotropic box')
+    params['Nmesh'][-1] = int(np.round(params['Nmesh'][1]/params['BoxSize'][1]*params['BoxSize'][-1]/params['resolution_ratio']))
+    params['BoxSize'][-1] = params['Nmesh'][-1]*params['BoxSize'][1]/params['Nmesh'][1]*params['resolution_ratio']
+    
+    print('Nmesh:', params['Nmesh'], 'BoxSize: ', params['BoxSize'],'Resolution: ', np.asarray(params['BoxSize'])/np.asarray(params['Nmesh']))
 
     if params['save3D'] or params['save3Dpower']:
         try:
